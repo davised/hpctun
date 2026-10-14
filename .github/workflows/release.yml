@@ -2,7 +2,8 @@
 # release of that commit. The build job tests and builds with read-only
 # access. The publish job runs only after a maintainer approves it (the
 # protected "release" environment); it alone can write to the repository
-# and read the signing key, signs SHA256SUMS, and creates the release.
+# and read the signing key, signs SHA256SUMS, and creates the release,
+# with CHANGELOG.md's Unreleased section as its notes.
 name: release
 
 on:
@@ -29,6 +30,10 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: scripts/check.sh
+      # Fail before anyone is asked to approve if CHANGELOG.md has no
+      # changes under "## Unreleased" for the release notes.
+      - name: Check the release notes
+        run: go run ./scripts/changelog -notes
       - run: scripts/dist.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -70,5 +75,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(cat dist/VERSION)
-          gh release create "$v" --target "$GITHUB_SHA" --title "$v" --notes "hpctun $v" \
+          # The notes are CHANGELOG.md's Unreleased section, read from this
+          # commit's source: the changes since the last release.
+          go run ./scripts/changelog -notes > "$RUNNER_TEMP/notes.md"
+          gh release create "$v" --target "$GITHUB_SHA" --title "$v" --notes-file "$RUNNER_TEMP/notes.md" \
             dist/hpctun-* dist/SHA256SUMS dist/SHA256SUMS.sig dist/VERSION

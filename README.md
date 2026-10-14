@@ -106,6 +106,9 @@ If the latest release is older than yours (it was rolled back),
 self-update moves you back to it and says so. A build from a checkout is
 only replaced with `--force`.
 
+What changed in each release is in [CHANGELOG.md](CHANGELOG.md) and on
+the [releases page](https://github.com/davised/hpctun/releases).
+
 # Quick start
 
 <sub>[↑ Contents](#contents)</sub>
