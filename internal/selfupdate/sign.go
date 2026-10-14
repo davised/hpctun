@@ -20,7 +20,7 @@ const PlaceholderKey = "UNSET-RELEASE-SIGNING-KEY"
 // signs every release's SHA256SUMS (scripts/sign -keygen prints it). The
 // private key lives only in the GitHub "release" environment's secret
 // HPCTUN_SIGNING_KEY, used by the release workflow's publish job.
-const ReleasePublicKey = PlaceholderKey
+const ReleasePublicKey = "Rjj3TaWlfhZKA5YWGukYy6//raHX5sTAR14y0k5peI4="
 
 // ErrNoReleaseKey: this build cannot check releases at all.
 var ErrNoReleaseKey = errors.New("this build of hpctun has no release signing key, so it cannot check that a release is genuine; download the new release from " + DefaultReleases)
