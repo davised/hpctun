@@ -1,0 +1,23 @@
+// Example site file for hpctun vscode-settings. Put it on the cluster and
+// name it in the site's hpctun config:
+//   [vscode]
+//   settings = "/path/on/the/cluster/vscode.jsonc"
+// hpctun adds its built-in settings (internal/vscode/defaults.jsonc in the
+// source), then this file's: a value here replaces hpctun's, and null
+// removes one. A user's own settings always win over both.
+{
+	// Change one of hpctun's settings.
+	"search.maxResults": 2000,
+
+	// Remove one of hpctun's settings entirely.
+	"search.searchOnType": null,
+
+	// Remove one entry, and add one, in an object setting.
+	"files.watcherExclude": {
+		"**/work/**": null,
+		"**/results/**": true
+	},
+
+	// A setting of the site's own.
+	"http.noProxy": ["example.edu"]
+}

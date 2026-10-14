@@ -1,0 +1,74 @@
+# Run by hand (Actions > release > Run workflow) on main to publish a
+# release of that commit. The build job tests and builds with read-only
+# access. The publish job runs only after a maintainer approves it (the
+# protected "release" environment); it alone can write to the repository
+# and read the signing key, signs SHA256SUMS, and creates the release.
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: scripts/check.sh
+      - run: scripts/dist.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      # The signer comes from the source of this commit, never from the
+      # build job's output.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Check the archives against SHA256SUMS
+        run: cd dist && sha256sum -c SHA256SUMS
+      - name: Sign SHA256SUMS
+        env:
+          HPCTUN_SIGNING_KEY: ${{ secrets.HPCTUN_SIGNING_KEY }}
+        run: go run ./scripts/sign -sign dist/SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(cat dist/VERSION)
+          gh release create "$v" --target "$GITHUB_SHA" --title "$v" --notes "hpctun $v" \
+            dist/hpctun-* dist/SHA256SUMS dist/SHA256SUMS.sig dist/VERSION

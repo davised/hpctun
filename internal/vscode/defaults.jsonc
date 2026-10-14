@@ -1,0 +1,53 @@
+// hpctun's built-in VS Code remote (machine) settings for an HPC cluster
+// with an NFS home: less file system load from search and file watching.
+// hpctun vscode-settings adds them; a site file can override or remove
+// them (examples/README.md). JSONC, as VS Code's settings files are.
+{
+	// Search: no symlink following, capped results and threads, and no
+	// new search on every keystroke.
+	"search.followSymlinks": false,
+	"search.maxResults": 1000,
+	"search.ripgrep.maxThreads": 4,
+	"search.searchOnType": false,
+
+	// Terminal: don't check the file system for every path-like word
+	// printed in a remote terminal.
+	"terminal.integrated.enableFileLinks": "notRemote",
+
+	// File watching: skip directories that are large or change often.
+	// Excluded paths still show in the Explorer but don't refresh by
+	// themselves. "**": true turns watching off entirely.
+	"files.watcherExclude": {
+		"**/.git/objects/**": true,
+		"**/.git/subtree-cache/**": true,
+		"**/node_modules/**": true,
+		"**/.conda/**": true,
+		"**/envs/**": true,
+		"**/.pixi/**": true,
+		"**/.venv/**": true,
+		"**/venv/**": true,
+		"**/__pycache__/**": true,
+		"**/.ipynb_checkpoints/**": true,
+		"**/.cache/**": true,
+		"**/.snakemake/**": true,
+		"**/.nextflow/**": true,
+		"**/work/**": true
+	},
+
+	// Search skips the same directories (watcherExclude doesn't affect
+	// search).
+	"search.exclude": {
+		"**/node_modules": true,
+		"**/.conda": true,
+		"**/envs": true,
+		"**/.pixi": true,
+		"**/.venv": true,
+		"**/venv": true,
+		"**/__pycache__": true,
+		"**/.ipynb_checkpoints": true,
+		"**/.cache": true,
+		"**/.snakemake": true,
+		"**/.nextflow": true,
+		"**/work": true
+	}
+}

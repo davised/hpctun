@@ -1,0 +1,12 @@
+# Release archives (scripts/dist.sh)
+/dist/
+
+# Kept by the maintainer outside this repository
+/docs/
+/.beads/
+/.agents/
+/.claude/
+/.codex/
+/CLAUDE.md
+.dolt/
+*.db

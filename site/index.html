@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hpctun</title>
+<meta name="description" content="Reach Jupyter, RStudio, VS Code and files on HPC compute nodes from your laptop. hpctun opens, tracks and closes the ssh tunnels for you, with the ssh you already have.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23d73f09'/%3E%3Cpath d='M7 16h18' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='7' cy='16' r='4' fill='white'/%3E%3Ccircle cx='25' cy='16' r='4' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script>
+  // Apply a saved theme before first paint. Storage may be unavailable.
+  try { var t = localStorage.getItem("hpctun-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+
+<!-- Arrowheads shared by every diagram on the page. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="a-you" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-you" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="a-login" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-login" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="a-xfer" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-xfer" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="a-node" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-node" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="a-bad" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-bad" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="a-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-muted" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="a-relay" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-relay" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top">hpc<span>tun</span></a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#problem">Why use it</a>
+      <a href="#network">The network</a>
+      <a href="#tunnel">Tunnels</a>
+      <a href="#one-login">One login</a>
+      <a href="#routes">Routes</a>
+      <a href="#files">Files</a>
+      <a href="#browse">Browser</a>
+      <a href="#code">VS Code</a>
+      <a href="#tray">Menu bar</a>
+      <a href="#osu">At OSU</a>
+      <a href="#start">Get started</a>
+    </nav>
+    <button class="theme-btn" id="theme-btn" type="button" aria-label="Switch light or dark theme">◐</button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ================================================================ HERO -->
+<section class="hero">
+  <p class="kicker">For HPC users</p>
+  <h1>Use apps on compute nodes <em>from your laptop</em></h1>
+  <p class="lead">
+    hpctun lets you open Jupyter, RStudio Server, Shiny and other web apps running in your
+    cluster jobs in your own browser, copy files to and from the cluster, and run VS Code
+    inside a Slurm job, without writing ssh commands. It uses the ssh already on your
+    computer; tunnels and copies need nothing installed on the cluster.
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="#problem">Why use it</a>
+    <a class="btn" href="#start">Get started</a>
+  </div>
+
+  <div class="uses">
+    <div class="use"><b>Web apps on a compute node</b><span>Jupyter Lab, RStudio Server, Shiny, a Dask or Ray dashboard, MultiQC reports: open them in your browser.</span></div>
+    <div class="use"><b>Copying files</b><span><code>hpctun cp</code> and <code>rsync</code> to the cluster's shared filesystem, with Tab completion of remote paths.</span></div>
+    <div class="use"><b>VS Code in a Slurm job</b><span>Editor, terminals and notebooks run on the job's node instead of the login node.</span></div>
+    <div class="use"><b>Campus-only pages</b><span>A browser window routed through the cluster, for sites that only answer on campus.</span></div>
+  </div>
+</section>
+
+<!-- ============================================================= PROBLEM -->
+<section id="problem">
+  <p class="kicker">Why use it</p>
+  <h2>Compared with what you do now</h2>
+  <p class="lead">
+    Everything hpctun does can be done with plain ssh, and hpctun runs plain ssh underneath.
+    It saves you remembering the commands and cleaning up after them.
+  </p>
+  <div class="table-wrap">
+  <table class="why">
+    <thead><tr><th>If you now…</th><th>With hpctun</th></tr></thead>
+    <tbody>
+      <tr><td>type <code>ssh -L 8888:localhost:8888 -J you@login… you@node42</code> to reach Jupyter</td>
+          <td><code>hpctun up jupyter</code>. <code>hpctun status</code> lists what is open; <code>hpctun down</code> closes it. No stray ssh processes to hunt for.</td></tr>
+      <tr><td>approve a 2FA prompt for every terminal, copy and tunnel</td>
+          <td>One login is shared by tunnels, <code>ssh</code>, <code>scp</code> and <code>rsync</code>. <code>hpctun ssh-config key</code> sets up key login, which at some sites (OSU included) skips 2FA.</td></tr>
+      <tr><td>copy with <code>scp</code> to the login node, typing remote paths from memory</td>
+          <td><code>hpctun cp</code> goes to the transfer node (faster link, same files), and Tab completes remote paths.</td></tr>
+      <tr><td>lose your tunnels when the laptop sleeps or the Wi-Fi changes</td>
+          <td><code>hpctun up --all</code>, or one click in the menu bar, puts them all back.</td></tr>
+      <tr><td>use Open OnDemand</td>
+          <td>Keep using it for the apps it offers. hpctun covers what it doesn't: your own Shiny app or dashboard, any port, in your own browser.</td></tr>
+      <tr><td>use VS Code Remote-SSH to the login node</td>
+          <td><code>hpctun code</code> runs VS Code's server inside your own Slurm job, so your terminals and language servers use the job's CPUs, not the shared login node.</td></tr>
+      <tr><td>turn on the VPN to reach a campus-only website</td>
+          <td><code>hpctun browse</code> opens one browser window that goes through the cluster; the rest of your traffic is unaffected.</td></tr>
+      <tr><td>edit <code>~/.ssh/config</code> by hand, or copy someone else's</td>
+          <td><code>hpctun init</code> asks a few questions and shows the changes before writing them.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================================= NETWORK -->
+<section id="network">
+  <p class="kicker">The network</p>
+  <h2>How a cluster is usually laid out</h2>
+  <p class="lead">
+    Compute nodes sit on a private network. From the internet you can reach the machines on
+    its edge: the login node and the transfer node.
+  </p>
+
+  <figure class="diagram">
+    <div class="scroll">
+    <svg class="dg wide" viewBox="0 0 960 440" role="img" aria-labelledby="d1t d1d">
+      <title id="d1t">The HPC network</title>
+      <desc id="d1d">Your laptop can reach the login node and the transfer node over the internet. Compute nodes sit behind them on a private network; your laptop has no route to them.</desc>
+
+      <!-- cluster zone -->
+      <rect class="zone" x="400" y="16" width="544" height="408" rx="20"/>
+      <text class="t-zone" x="924" y="44" text-anchor="end">HPC cluster · private network</text>
+
+      <!-- private network bus -->
+      <path class="bus" d="M560 103 H620 M560 337 H620 M620 96 V350 M620 105 H700 M620 218 H700 M620 332 H700"/>
+
+      <!-- laptop -->
+      <rect class="box you" x="24" y="168" width="190" height="96" rx="14"/>
+      <text class="t-title" x="119" y="208" text-anchor="middle">Your laptop</text>
+      <text class="t-sub" x="119" y="231" text-anchor="middle">home, office, café</text>
+      <text class="t-zone" x="119" y="296" text-anchor="middle">Internet</text>
+
+      <!-- laptop -> login -->
+      <path class="ln login" d="M214 196 C 280 196, 290 103, 336 103" marker-end="url(#a-login)"/>
+      <text class="t-label t-login" x="232" y="132">ssh ✓</text>
+      <!-- laptop -> transfer -->
+      <path class="ln xfer" d="M214 238 C 280 238, 290 337, 336 337" marker-end="url(#a-xfer)" stroke-width="4"/>
+      <text class="t-label t-xfer" x="214" y="318">scp, rsync ✓</text>
+      <text class="t-sub" x="214" y="336">fast link</text>
+      <!-- laptop -> compute: blocked -->
+      <path class="ln bad" d="M214 217 H392"/>
+      <circle class="xbg" cx="404" cy="217" r="15"/>
+      <path class="x" d="M397 210l14 14M411 210l-14 14"/>
+      <text class="t-label t-bad" x="300" y="208" text-anchor="middle">no route</text>
+
+      <!-- login node -->
+      <rect class="box login" x="340" y="60" width="220" height="86" rx="14"/>
+      <text class="t-title" x="450" y="97" text-anchor="middle">Login node</text>
+      <text class="t-sub" x="450" y="120" text-anchor="middle">log in, submit jobs</text>
+
+      <!-- transfer node -->
+      <rect class="box xfer" x="340" y="294" width="220" height="86" rx="14"/>
+      <text class="t-title" x="450" y="331" text-anchor="middle">Transfer node</text>
+      <text class="t-sub" x="450" y="354" text-anchor="middle">move data, fast</text>
+
+      <!-- compute nodes -->
+      <rect class="box node" x="700" y="72" width="220" height="66" rx="12"/>
+      <text class="t-title" x="716" y="100">node41</text>
+      <text class="t-sub" x="716" y="122">RStudio Server :8787</text>
+      <rect class="box node" x="700" y="185" width="220" height="66" rx="12"/>
+      <text class="t-title" x="716" y="213">node42</text>
+      <text class="t-sub" x="716" y="235">Jupyter Lab :8888</text>
+      <rect class="box node" x="700" y="299" width="220" height="66" rx="12"/>
+      <text class="t-title" x="716" y="327">node43</text>
+      <text class="t-sub" x="716" y="349">Shiny app :3838</text>
+      <text class="t-label t-node" x="810" y="400" text-anchor="middle">Compute nodes: no direct internet</text>
+    </svg>
+    </div>
+    <figcaption>The teal and blue lines reach the login and transfer nodes from the internet. The red dashed line has no route: your laptop can't reach the compute nodes (purple) directly.</figcaption>
+  </figure>
+
+  <div class="key-points">
+    <div class="kp" style="--c: var(--login)"><b>Login node</b><span>Reachable from the internet with ssh, and it can reach every compute node, so tunnels go through it.</span></div>
+    <div class="kp" style="--c: var(--xfer)"><b>Transfer node</b><span>Also reachable from the internet, with a faster external connection. Copies go here.</span></div>
+    <div class="kp" style="--c: var(--node)"><b>Compute nodes</b><span>Where jobs and their web apps run. Reachable only from inside the cluster.</span></div>
+  </div>
+</section>
+
+<!-- ============================================================== TUNNEL -->
+<section id="tunnel">
+  <p class="kicker">Port forwarding</p>
+  <h2>What a tunnel does</h2>
+  <p class="lead">
+    A tunnel (an ssh port forward) makes a port on a compute node appear as a port on your
+    laptop. The traffic travels inside the ssh connection to the login node, which passes it on.
+  </p>
+
+  <figure class="diagram stepper" id="stepper" data-step="0">
+    <div class="scroll">
+    <svg class="dg wide" viewBox="0 0 960 330" role="img" aria-labelledby="d2t d2d">
+      <title id="d2t">How a tunnel carries a request</title>
+      <desc id="d2d">The browser asks localhost port 8888. ssh on the laptop listens there and sends the request through its encrypted connection to the login node, which passes it to node42 port 8888, where Jupyter answers.</desc>
+
+      <rect class="zone laptop" x="16" y="16" width="320" height="298" rx="18"/>
+      <text class="t-zone" x="36" y="44">Your laptop</text>
+      <rect class="zone" x="400" y="16" width="544" height="298" rx="20"/>
+      <text class="t-zone" x="924" y="44" text-anchor="end">HPC cluster</text>
+
+      <!-- the ssh pipe -->
+      <path class="pipe thick" d="M296 236 H446"/>
+      <text class="t-label t-you" x="371" y="212" text-anchor="middle">encrypted ssh</text>
+      <path class="ln muted thin" d="M640 236 H716" marker-end="url(#a-muted)"/>
+      <text class="t-sub" x="678" y="222" text-anchor="middle">private</text>
+      <path class="ln muted thin" d="M176 132 V188" marker-end="url(#a-muted)"/>
+
+      <g class="step-el" data-on="0 4">
+        <rect class="box you" x="40" y="70" width="272" height="62" rx="12"/>
+        <text class="t-title" x="58" y="96">Browser</text>
+        <text class="t-mono" x="58" y="118">http://localhost:8888</text>
+      </g>
+      <g class="step-el" data-on="1">
+        <rect class="box you" x="40" y="204" width="256" height="64" rx="12"/>
+        <text class="t-title" x="58" y="231">ssh, run by hpctun</text>
+        <text class="t-sub" x="58" y="253">listening on localhost:8888</text>
+      </g>
+      <g class="step-el" data-on="2">
+        <rect class="box login" x="446" y="196" width="194" height="80" rx="14"/>
+        <text class="t-title" x="543" y="231" text-anchor="middle">Login node</text>
+        <text class="t-sub" x="543" y="254" text-anchor="middle">passes it on</text>
+      </g>
+      <g class="step-el" data-on="3">
+        <rect class="box node" x="720" y="196" width="200" height="80" rx="14"/>
+        <text class="t-title" x="820" y="231" text-anchor="middle">node42</text>
+        <text class="t-sub" x="820" y="254" text-anchor="middle">Jupyter on :8888</text>
+      </g>
+
+      <path id="packet-path" d="M176 132 V236 H820" fill="none" stroke="none"/>
+      <circle class="packet" id="packet" cx="176" cy="132" r="10"/>
+    </svg>
+    </div>
+    <div class="step-caption" id="step-caption" aria-live="polite"></div>
+    <div class="step-controls">
+      <button type="button" id="step-prev">← Back</button>
+      <button type="button" class="primary" id="step-next">Next →</button>
+      <button type="button" id="step-play">▶ Play</button>
+      <div class="step-dots" id="step-dots" aria-hidden="true"></div>
+    </div>
+  </figure>
+
+  <p>
+    hpctun opens the forward, records it, shows it in <code>hpctun status</code>, reopens it
+    after a sleep or network change, and closes it.
+  </p>
+<pre><span class="p">$ </span>hpctun up 8888 --host node42 --loopback
+<span class="p">$ </span>open http://localhost:8888        <span class="c"># Jupyter, from your laptop</span>
+<span class="p">$ </span>hpctun down 8888</pre>
+</section>
+
+<!-- =========================================================== ONE LOGIN -->
+<section id="one-login">
+  <p class="kicker">One login</p>
+  <h2>One shared connection</h2>
+  <p class="lead">
+    hpctun sets ssh up so everything shares one connection to the login node. Tunnels,
+    <code>ssh</code> sessions, <code>scp</code> and <code>rsync</code> all ride the connection
+    that is already open, so you type your password and approve 2FA once.
+  </p>
+
+  <div class="grid2">
+    <figure class="diagram" style="margin:0">
+      <p class="panel-title bad">Separate connections: a login each</p>
+      <svg class="dg" viewBox="0 0 460 260" role="img" aria-labelledby="d3at">
+        <title id="d3at">Three separate connections, each asking for 2FA</title>
+        <rect class="box plain" x="12" y="24" width="150" height="46" rx="10"/><text class="t-label" x="87" y="52" text-anchor="middle">Jupyter tunnel</text>
+        <rect class="box plain" x="12" y="106" width="150" height="46" rx="10"/><text class="t-label" x="87" y="134" text-anchor="middle">ssh node42</text>
+        <rect class="box plain" x="12" y="188" width="150" height="46" rx="10"/><text class="t-label" x="87" y="216" text-anchor="middle">scp results</text>
+        <path class="ln you" d="M162 47 C 250 47, 260 110, 334 116" marker-end="url(#a-you)"/>
+        <path class="ln you" d="M162 129 H334" marker-end="url(#a-you)"/>
+        <path class="ln you" d="M162 211 C 250 211, 260 148, 334 142" marker-end="url(#a-you)"/>
+        <g><rect class="badge warn" x="214" y="44" width="50" height="24" rx="12"/><text class="t-label t-bad" x="239" y="61" text-anchor="middle">2FA</text></g>
+        <g><rect class="badge warn" x="214" y="117" width="50" height="24" rx="12"/><text class="t-label t-bad" x="239" y="134" text-anchor="middle">2FA</text></g>
+        <g><rect class="badge warn" x="214" y="190" width="50" height="24" rx="12"/><text class="t-label t-bad" x="239" y="207" text-anchor="middle">2FA</text></g>
+        <rect class="box login" x="338" y="88" width="110" height="82" rx="12"/>
+        <text class="t-title" x="393" y="126" text-anchor="middle">Login</text><text class="t-sub" x="393" y="146" text-anchor="middle">node</text>
+      </svg>
+    </figure>
+    <figure class="diagram" style="margin:0">
+      <p class="panel-title ok">Shared connection: one login</p>
+      <svg class="dg" viewBox="0 0 460 260" role="img" aria-labelledby="d3bt">
+        <title id="d3bt">Three uses sharing one connection, one 2FA prompt</title>
+        <rect class="box plain" x="12" y="24" width="150" height="46" rx="10"/><text class="t-label" x="87" y="52" text-anchor="middle">Jupyter tunnel</text>
+        <rect class="box plain" x="12" y="106" width="150" height="46" rx="10"/><text class="t-label" x="87" y="134" text-anchor="middle">ssh node42</text>
+        <rect class="box plain" x="12" y="188" width="150" height="46" rx="10"/><text class="t-label" x="87" y="216" text-anchor="middle">scp results</text>
+        <path class="ln you thin" d="M162 47 C 200 47, 200 129, 222 129"/>
+        <path class="ln you thin" d="M162 129 H222"/>
+        <path class="ln you thin" d="M162 211 C 200 211, 200 129, 222 129"/>
+        <path class="pipe thick" d="M222 129 H334"/>
+        <path class="ln you" d="M222 129 H334" marker-end="url(#a-you)"/>
+        <g><rect class="badge ok" x="236" y="88" width="84" height="24" rx="12"/><text class="t-label t-ok" x="278" y="105" text-anchor="middle">2FA once</text></g>
+        <rect class="box login" x="338" y="88" width="110" height="82" rx="12"/>
+        <text class="t-title" x="393" y="126" text-anchor="middle">Login</text><text class="t-sub" x="393" y="146" text-anchor="middle">node</text>
+      </svg>
+    </figure>
+  </div>
+
+  <p>
+    The shared connection stays open in the background. If it drops (the laptop slept, the
+    Wi-Fi changed, the VPN reconnected), <code>hpctun up --all</code> reopens it and puts back
+    every tunnel. With an ssh key, which <code>hpctun ssh-config key</code> sets up for you,
+    there is no password to type, and some sites (OSU among them) skip the 2FA prompt too. While it is open, any program running as you on your computer can use it without a password or 2FA; <code>hpctun logout</code> closes it.
+  </p>
+</section>
+
+<!-- ============================================================== ROUTES -->
+<section id="routes">
+  <p class="kicker">Routes</p>
+  <h2>Apps that listen on localhost only</h2>
+  <p class="lead">
+    Many apps, Jupyter included, accept connections only from the machine they run on
+    (<code>127.0.0.1</code>, “localhost”). The login node can't connect to those, so the
+    tunnel has to continue to the node itself. In practice: if a tunnel to Jupyter
+    opens but the page doesn't load, add <code>--loopback</code>. For an app you start yourself, start it on <code>127.0.0.1</code> and use <code>--loopback</code>: then the rest of the cluster cannot reach it.
+  </p>
+
+  <div class="grid2">
+    <figure class="diagram" style="margin:0">
+      <p class="panel-title">Direct: the login node connects to the app</p>
+      <svg class="dg" viewBox="0 0 460 300" role="img" aria-labelledby="d4at d4ad">
+        <title id="d4at">Direct route</title>
+        <desc id="d4ad">The login node reaches an app listening on all addresses, but not one listening on localhost only.</desc>
+        <rect class="box you" x="8" y="122" width="88" height="56" rx="10"/><text class="t-label" x="52" y="155" text-anchor="middle">Laptop</text>
+        <path class="pipe" d="M96 150 H150"/>
+        <rect class="box login" x="150" y="118" width="98" height="64" rx="10"/><text class="t-label" x="199" y="146" text-anchor="middle">Login</text><text class="t-sub" x="199" y="165" text-anchor="middle">node</text>
+        <rect class="box node" x="290" y="14" width="162" height="272" rx="14"/>
+        <text class="t-label t-node" x="371" y="38" text-anchor="middle">node42</text>
+        <rect class="box plain" x="304" y="56" width="134" height="56" rx="10"/>
+        <text class="t-label" x="371" y="80" text-anchor="middle">Dashboard</text><text class="t-sub" x="371" y="99" text-anchor="middle">all addresses</text>
+        <rect class="box ghost" x="300" y="138" width="142" height="138" rx="12"/>
+        <text class="t-sub" x="371" y="160" text-anchor="middle">localhost only</text>
+        <rect class="box plain" x="310" y="200" width="122" height="56" rx="10"/>
+        <text class="t-label" x="371" y="224" text-anchor="middle">Jupyter</text><text class="t-sub" x="371" y="243" text-anchor="middle">127.0.0.1</text>
+        <path class="ln login" d="M248 138 C 270 120, 280 90, 302 86" marker-end="url(#a-login)"/>
+        <text class="t-label t-ok" x="268" y="102" text-anchor="middle">✓</text>
+        <path class="ln bad" d="M248 164 C 270 180, 280 200, 290 206"/>
+        <circle class="xbg" cx="300" cy="210" r="11"/><path class="x" d="M295 205l10 10M305 205l-10 10" style="stroke-width:3"/>
+      </svg>
+      <figcaption>Cheapest: no extra ssh process. But the app listens on all addresses, so everyone on the cluster can reach it: only for apps that ask for a password or token.</figcaption>
+    </figure>
+    <figure class="diagram" style="margin:0">
+      <p class="panel-title">Through: ssh continues on to the node itself</p>
+      <svg class="dg" viewBox="0 0 460 300" role="img" aria-labelledby="d4bt d4bd">
+        <title id="d4bt">Jump route</title>
+        <desc id="d4bd">A second ssh connection passes through the login node to node42 and connects to Jupyter from inside, on localhost.</desc>
+        <rect class="box you" x="8" y="134" width="88" height="56" rx="10"/><text class="t-label" x="52" y="167" text-anchor="middle">Laptop</text>
+        <rect class="box login" x="150" y="112" width="98" height="76" rx="10" opacity="0.55"/><text class="t-label" x="199" y="134" text-anchor="middle">Login node</text>
+        <rect class="box node" x="290" y="14" width="162" height="272" rx="14"/>
+        <text class="t-label t-node" x="371" y="38" text-anchor="middle">node42</text>
+        <rect class="box plain" x="304" y="56" width="134" height="56" rx="10"/>
+        <text class="t-label" x="371" y="80" text-anchor="middle">Dashboard</text><text class="t-sub" x="371" y="99" text-anchor="middle">all addresses</text>
+        <rect class="box ghost" x="300" y="138" width="142" height="138" rx="12"/>
+        <text class="t-sub" x="371" y="160" text-anchor="middle">localhost only</text>
+        <rect class="box plain" x="310" y="200" width="122" height="56" rx="10"/>
+        <text class="t-label" x="371" y="224" text-anchor="middle">Jupyter</text><text class="t-sub" x="371" y="243" text-anchor="middle">127.0.0.1</text>
+        <path class="pipe node" d="M96 162 H268 C 290 162, 300 190, 330 198"/>
+        <path class="ln node" d="M96 162 H268 C 290 162, 300 190, 326 198" marker-end="url(#a-node)"/>
+        <text class="t-label t-node" x="199" y="98" text-anchor="middle">ssh to node42</text>
+      </svg>
+      <figcaption>For localhost-only apps, and the safer choice for anything you start on a compute node. hpctun runs a separate ssh process for this tunnel.</figcaption>
+    </figure>
+  </div>
+  <div class="tip">
+    <b>Which one do I need?</b> For an app you start yourself, start it on <code>127.0.0.1</code> and add <code>--loopback</code> (or <code>route = "jump"</code> in the config). To check an existing app, run <code>ssh node42 ss -ltn | grep 8888</code>: <code>127.0.0.1:8888</code> means localhost only, so add <code>--loopback</code>; <code>0.0.0.0:8888</code> or <code>*:8888</code> means the direct route works, but also that other cluster users can reach the app, so make sure it asks for a password or token.
+  </div>
+</section>
+
+<!-- =============================================================== FILES -->
+<section id="files">
+  <p class="kicker">Files</p>
+  <h2>Copying files</h2>
+  <p class="lead">
+    Copies go to the transfer node. It has the faster external link and sees the cluster's
+    shared, networked filesystem: the same home, lab and project folders as every compute node.
+  </p>
+
+  <figure class="diagram">
+    <div class="scroll">
+    <svg class="dg wide" viewBox="0 0 960 420" role="img" aria-labelledby="d5t d5d">
+      <title id="d5t">Two ways to copy files</title>
+      <desc id="d5d">Copies go from the laptop to the transfer node, which sees the shared networked storage mounted on every node. As a bonus, a copy can hop through the transfer node to node7, whose local /scratch only node7 sees, if ssh to node7 is allowed.</desc>
+
+      <rect class="zone" x="360" y="16" width="584" height="388" rx="20"/>
+      <text class="t-zone" x="924" y="392" text-anchor="end">HPC cluster</text>
+
+      <!-- shared storage -->
+      <g>
+        <path class="disk" d="M610 52 v66 a110 18 0 0 0 220 0 v-66"/>
+        <ellipse class="disk" cx="720" cy="52" rx="110" ry="18"/>
+        <text class="t-title" x="720" y="96" text-anchor="middle">Shared filesystem</text>
+        <text class="t-mono" x="720" y="120" text-anchor="middle">/home  /lab  /project</text>
+      </g>
+      <text class="t-sub" x="852" y="170" text-anchor="middle">mounted on every node</text>
+      <text class="t-label t-xfer" x="250" y="176" text-anchor="middle">hpctun cp</text>
+
+      <!-- node7 with local scratch -->
+      <rect class="box node" x="700" y="200" width="226" height="176" rx="14"/>
+      <text class="t-title" x="718" y="230">node7</text>
+      <path class="disk" d="M742 280 v44 a72 12 0 0 0 144 0 v-44"/>
+      <ellipse class="disk" cx="814" cy="280" rx="72" ry="12"/>
+      <text class="t-mono" x="814" y="312" text-anchor="middle">/scratch</text>
+      <text class="t-sub" x="814" y="362" text-anchor="middle">only node7 sees this</text>
+
+      <!-- mounts -->
+      <path class="ln muted thin dot" d="M720 136 V200"/>
+      <path class="ln muted thin dot" d="M640 132 C 600 160, 560 168, 502 168"/>
+
+      <!-- laptop -->
+      <rect class="box you" x="20" y="164" width="180" height="92" rx="14"/>
+      <text class="t-title" x="110" y="204" text-anchor="middle">Your laptop</text>
+      <text class="t-mono" x="110" y="228" text-anchor="middle">results/</text>
+
+      <!-- transfer node -->
+      <rect class="box xfer" x="300" y="150" width="200" height="120" rx="14"/>
+      <text class="t-title" x="400" y="194" text-anchor="middle">Transfer node</text>
+      <text class="t-mono" x="400" y="218" text-anchor="middle">files</text>
+      <text class="t-sub" x="400" y="242" text-anchor="middle">fast external link</text>
+
+      <!-- lane A -->
+      <path class="pipe xfer" d="M200 190 H300"/>
+      <path class="ln xfer" d="M200 190 H296" marker-end="url(#a-xfer)"/>
+      <path class="ln xfer" d="M500 172 C 540 150, 560 110, 604 94" marker-end="url(#a-xfer)"/>
+      
+
+      <!-- lane B -->
+      <path class="ln node thin dot" d="M200 232 H296" marker-end="url(#a-node)"/>
+      <path class="ln node thin dot" d="M500 248 C 580 248, 620 300, 738 300" marker-end="url(#a-node)"/>
+      
+      <text class="t-label t-node" x="600" y="306" text-anchor="middle">bonus: hop to node7</text><text class="t-sub" x="600" y="326" text-anchor="middle">needs ssh to the node</text>
+    </svg>
+    </div>
+  </figure>
+
+  <div class="card">
+    <h3 style="margin:0 0 4px;color:var(--xfer)">Copy to and from the shared filesystem</h3>
+    <p style="margin:0;color:var(--muted);font-size:15px">Your home, lab and project folders, the same ones every compute node sees. <code>hpctun cp</code>, <code>hpctun rsync</code> and <code>hpctun sftp</code> take the usual <code>scp</code>, <code>rsync</code> and <code>sftp</code> arguments, with the ssh setup already done.</p>
+<pre><span class="p">$ </span>hpctun cp results.tsv files:/lab/project/run1/
+<span class="p">$ </span>hpctun rsync -av files:/lab/project/run1/plots/ plots/
+<span class="p">$ </span>hpctun sftp files</pre>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin:0 0 4px">Tab completes paths on the cluster</h3>
+    <p style="margin:0;color:var(--muted);font-size:15px">Press Tab after a remote path and the shell lists what is there, just as it does for files on your laptop. The listing uses the connection that is already open, so it never asks you to log in. Turn it on once with <code>hpctun completion zsh --help</code> (or <code>bash</code>, <code>fish</code>).</p>
+<pre><span class="p">$ </span>hpctun cp files:/lab/project/<b style="color:#ffb27a">&lt;Tab&gt;</b>
+run1/   run2/   samples.tsv   README.md
+<span class="p">$ </span>hpctun cp files:/lab/project/run1/<b style="color:#ffb27a">&lt;Tab&gt;</b>
+counts.tsv   multiqc_report.html   plots/</pre>
+  </div>
+
+  <p style="margin-top:20px;font-size:15px;color:var(--muted)">
+    <b style="color:var(--node)">Bonus: a node's own disk.</b>
+    For files on one node's local <code>/scratch</code>, <code>hpctun cp node7:/scratch/you/run.log .</code>
+    hops through the transfer node for you (it runs <code>scp -J files …</code> and prints it).
+    This needs ssh access to that node, which some clusters allow only while you have a job there.
+  </p>
+</section>
+
+<!-- ============================================================== BROWSE -->
+<section id="browse">
+  <p class="kicker">Browser</p>
+  <h2>Opening a tunnel's page</h2>
+  <p class="lead">
+    <code>hpctun browse</code> opens the tunnel if it is not up yet, then opens the page. A
+    port forward opens in your usual browser. A <em>SOCKS proxy</em> tunnel opens a separate
+    browser window that sends its web traffic through the cluster (it still reaches <code>localhost</code> on your laptop directly), which is useful for sites that
+    only answer on campus. Other browser windows are not affected.
+  </p>
+
+  <figure class="diagram">
+    <div class="scroll">
+    <svg class="dg wide" viewBox="0 0 960 380" role="img" aria-labelledby="d6t d6d">
+      <title id="d6t">hpctun browse</title>
+      <desc id="d6d">Your usual browser opens localhost:8888, carried to Jupyter on node42. A separate proxied window sends its web traffic through the login node to campus-only sites. Every other window goes straight to the internet.</desc>
+
+      <rect class="zone laptop" x="16" y="16" width="380" height="348" rx="18"/>
+      <text class="t-zone" x="36" y="44">Your laptop</text>
+      <rect class="zone" x="520" y="16" width="424" height="270" rx="20"/>
+      <text class="t-zone" x="924" y="270" text-anchor="end">Cluster &amp; campus network</text>
+
+      <!-- windows -->
+      <rect class="box you" x="40" y="62" width="330" height="72" rx="12"/>
+      <text class="t-title" x="58" y="92">Your usual browser</text>
+      <text class="t-mono" x="58" y="116">localhost:8888 → Jupyter</text>
+
+      <rect class="box login" x="40" y="160" width="330" height="72" rx="12"/>
+      <text class="t-title" x="58" y="190">Separate proxied window</text>
+      <text class="t-sub" x="58" y="214">web traffic via SOCKS :1080</text>
+
+      <rect class="box plain" x="40" y="264" width="330" height="72" rx="12"/>
+      <text class="t-title" x="58" y="294">Every other window</text>
+      <text class="t-sub" x="58" y="318">unchanged: straight to the internet</text>
+
+      <!-- pipe into login -->
+      <path class="pipe thick" d="M370 98 C 430 98, 440 150, 480 154"/>
+      <path class="pipe thick" d="M370 196 C 420 196, 440 172, 480 168"/>
+      <path class="ln you" d="M370 98 C 430 98, 440 150, 476 154" marker-end="url(#a-you)"/>
+      <path class="ln login" d="M370 196 C 420 196, 440 172, 476 168" marker-end="url(#a-login)"/>
+
+      <rect class="box login" x="480" y="122" width="160" height="80" rx="14"/>
+      <text class="t-title" x="560" y="158" text-anchor="middle">Login node</text>
+      <text class="t-sub" x="560" y="180" text-anchor="middle">ssh</text>
+
+      <rect class="box node" x="740" y="40" width="184" height="64" rx="12"/>
+      <text class="t-title" x="758" y="68">node42</text>
+      <text class="t-sub" x="758" y="90">Jupyter :8888</text>
+      <rect class="box plain" x="740" y="150" width="184" height="64" rx="12"/>
+      <text class="t-title" x="758" y="178">Campus-only site</text>
+      <text class="t-sub" x="758" y="200">internal chat, licenses…</text>
+
+      <path class="ln you" d="M640 146 C 690 140, 700 76, 736 74" marker-end="url(#a-you)"/>
+      <path class="ln login" d="M640 172 C 690 176, 700 182, 736 182" marker-end="url(#a-login)"/>
+
+      <!-- internet -->
+      <path class="ln muted" d="M370 300 C 520 300, 560 330, 700 330" marker-end="url(#a-muted)"/>
+      <text class="t-zone" x="770" y="335" text-anchor="middle">Internet</text>
+    </svg>
+    </div>
+    <figcaption>The proxied window is its own browser profile (Chrome, Edge, Brave or Chromium). hpctun never changes your system proxy settings or your other windows.</figcaption>
+  </figure>
+<pre><span class="p">$ </span>hpctun browse jupyter                  <span class="c"># http://localhost:8888 in your usual browser</span>
+<span class="p">$ </span>hpctun browse proxy                    <span class="c"># a proxied window on the tunnel's saved page</span>
+<span class="p">$ </span>hpctun browse proxy https://intranet.example.edu</pre>
+</section>
+
+<!-- ================================================================ CODE -->
+<section id="code">
+  <p class="kicker">VS Code</p>
+  <h2>VS Code in a Slurm job</h2>
+  <p class="lead">
+    <code>hpctun code</code> gets you a Slurm job, starts VS Code's tunnel inside it, and opens
+    VS Code on your laptop connected to that job. Terminals, language servers and notebook
+    kernels run on the compute node, not on the shared login node.
+  </p>
+
+  <figure class="diagram">
+    <div class="scroll">
+    <svg class="dg wide" viewBox="0 0 960 360" role="img" aria-labelledby="d7t d7d">
+      <title id="d7t">hpctun code</title>
+      <desc id="d7d">1: hpctun logs in to the login node and submits a Slurm job. 2: Slurm starts the job on a compute node. 3: the job starts VS Code's tunnel, which connects out to Microsoft's tunnel relay. 4: VS Code on your laptop connects to the relay and reaches the job.</desc>
+
+      <rect class="zone" x="300" y="130" width="644" height="214" rx="20"/>
+      <text class="t-zone" x="924" y="330" text-anchor="end">HPC cluster</text>
+
+      <!-- relay -->
+      <rect class="box plain" x="420" y="16" width="250" height="70" rx="35"/>
+      <text class="t-title" x="545" y="46" text-anchor="middle">VS Code tunnel relay</text>
+      <text class="t-sub" x="545" y="68" text-anchor="middle">Microsoft, on the internet</text>
+
+      <!-- laptop -->
+      <rect class="box you" x="20" y="140" width="210" height="96" rx="14"/>
+      <text class="t-title" x="125" y="180" text-anchor="middle">VS Code</text>
+      <text class="t-sub" x="125" y="204" text-anchor="middle">on your laptop</text>
+
+      <!-- login -->
+      <rect class="box login" x="330" y="236" width="180" height="84" rx="14"/>
+      <text class="t-title" x="420" y="272" text-anchor="middle">Login node</text>
+      <text class="t-mono" x="420" y="296" text-anchor="middle">sbatch</text>
+
+      <!-- node -->
+      <rect class="box node" x="680" y="156" width="244" height="160" rx="14"/>
+      <text class="t-title" x="700" y="188">Compute node</text>
+      <text class="t-sub" x="700" y="211">your Slurm job · 4 CPUs · 24 h</text>
+      <rect class="box plain" x="700" y="226" width="204" height="72" rx="10"/>
+      <text class="t-label" x="716" y="252">VS Code server</text>
+      <text class="t-sub" x="716" y="274">terminals, extensions,</text>
+      <text class="t-sub" x="716" y="290">notebook kernels</text>
+
+      <!-- 1 -->
+      <path class="ln login" d="M170 236 C 170 278, 260 278, 326 278" marker-end="url(#a-login)"/>
+      <circle class="num" cx="208" cy="272" r="13"/><text class="num-t" x="208" y="277">1</text>
+      <!-- 2 -->
+      <path class="ln node" d="M510 278 H676" marker-end="url(#a-node)"/>
+      <circle class="num" cx="594" cy="278" r="13"/><text class="num-t" x="594" y="283">2</text>
+      <text class="t-sub" x="594" y="306" text-anchor="middle">Slurm starts it</text>
+      <!-- 3 -->
+      <path class="ln relay" d="M800 156 C 800 70, 740 51, 674 51" marker-end="url(#a-relay)"/>
+      <circle class="num" cx="786" cy="96" r="13"/><text class="num-t" x="786" y="101">3</text>
+      <text class="t-sub" x="806" y="120">connects out</text>
+      <!-- 4 -->
+      <path class="ln you" d="M170 140 C 170 60, 300 51, 416 51" marker-end="url(#a-you)"/>
+      <circle class="num" cx="236" cy="72" r="13"/><text class="num-t" x="236" y="77">4</text>
+    </svg>
+    </div>
+    <figcaption>Nothing connects into the compute node: the job reaches out to the relay (through the site's web proxy), and VS Code meets it there.</figcaption>
+  </figure>
+<pre><span class="p">$ </span>hpctun code project                  <span class="c"># ~/project on the cluster, in a job of your own</span>
+<span class="p">$ </span>hpctun code -- --gres=gpu:1          <span class="c"># anything after -- goes to sbatch</span>
+<span class="p">$ </span>hpctun code --status                 <span class="c"># the job, its node and time left</span>
+<span class="p">$ </span>hpctun code --stop</pre>
+  <p>
+    The job keeps running when you close VS Code, and running <code>hpctun code</code> again
+    reconnects to it. Your files are on the cluster the whole time.
+  </p>
+  <p>The first time on each computer, hpctun shows the VS Code Server License Terms and asks you to accept them. Your editor reaches the job through Microsoft's dev tunnels service, which your files, terminals and edits pass through; check your institution's rules before working with restricted data this way.</p>
+</section>
+
+<!-- ================================================================ TRAY -->
+<section id="tray">
+  <p class="kicker">Optional</p>
+  <h2>Menu-bar app</h2>
+  <div class="tray-layout">
+    <div>
+      <p>
+        <code>hpctun-tray</code> puts your tunnels in the macOS menu bar, the Linux system tray or the Windows notification area.
+        Log in, open or close each tunnel, open a tunnel's page in the browser, and see your
+        VS Code job, without a terminal. A password or 2FA prompt appears in a small window,
+        and hpctun never stores what you type.
+      </p>
+      <p style="margin-bottom:4px">The icon tells you the state at a glance:</p>
+      <ul class="icon-states">
+        <li><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="currentColor"/></svg> every tunnel is up</li>
+        <li><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 3.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/></svg> logged in, some tunnels down</li>
+        <li><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/></svg> not logged in</li>
+        <li><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 18L18 4" stroke="currentColor" stroke-width="2"/></svg> something is wrong</li>
+      </ul>
+    </div>
+    <figure class="shot" data-shot>
+      <img src="img/tray-menu.png" width="361" height="379" alt="The hpctun menu: shell.hpc and files connected, Log out, the chat and socks SOCKS proxies ticked as open, the llm tunnel to ai-gateway.hpc.oregonstate.edu:8090, Open all, Close all, Open chat in browser, Open llm in browser, Code job: none, Open config, Start at login, Quit." loading="lazy">
+      <div class="ph"><div>Screenshot of the menu-bar menu<br>(add <code>site/img/tray-menu.png</code>)</div></div>
+      <figcaption>The hpctun menu on macOS.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================================================= COMPARE -->
+<section id="compare">
+  <p class="kicker">Commands</p>
+  <h2>Plain ssh and hpctun side by side</h2>
+  <div class="compare">
+    <div class="card before">
+      <h3>Plain ssh</h3>
+      <p>One command per forward; closing one means finding its process.</p>
+<pre>ssh -N -f -L 8888:localhost:8888 \
+    -J you@login.cluster.edu you@node42
+ssh -N -f -L 8787:node41:8787 you@login.cluster.edu
+<span class="c"># later: which of these is still running?</span>
+ps aux | grep 'ssh -N'
+lsof -i :8888
+kill 48213</pre>
+    </div>
+    <div class="card after">
+      <h3>With hpctun</h3>
+      <p>Tunnels are named once in a config file and used by name.</p>
+<pre>hpctun up --all      <span class="c"># safe to re-run</span>
+hpctun status
+hpctun browse jupyter
+hpctun down --all</pre>
+    </div>
+  </div>
+
+  <div class="status">
+    <p style="margin-top:20px"><code>hpctun status</code> answers “what's open, where does it go, is anyone using it?”:</p>
+<pre>gateway login: running (pid 86660, ssh-config)
+transfer files: connected (pid 86811)
+
+NAME      PORT   ROUTE   TARGET        STATE   CONNS
+jupyter   8888   jump    node42:8888   up      3
+rstudio   8787   master  node41:8787   up      1
+proxy     1080   socks   -             up      5
+shiny     3838   master  node43:3838   down    -</pre>
+  </div>
+  <p>
+    Tunnels are named once in a short config file. <code>hpctun add</code> asks the questions for
+    you, or you can open one ad hoc (<code>hpctun up 8888 --host node42 --loopback</code>) and
+    save it if you want to keep it.
+  </p>
+<pre><span class="c"># ~/.config/hpctun/config.toml</span>
+gateway = "login"
+default_host = "node42"
+
+[tunnel.jupyter]
+port = 8888
+route = "jump"          <span class="c"># Jupyter listens on localhost only</span>
+
+[tunnel.rstudio]
+port = 8787
+host = "node41"
+
+[tunnel.proxy]
+socks = 1080
+url = "https://intranet.example.edu"</pre>
+</section>
+
+<!-- =============================================================== TRUST -->
+<section id="trust">
+  <p class="kicker">Scope</p>
+  <h2>What it touches</h2>
+  <div class="grid3">
+    <div class="card"><b>No stored passwords</b><p style="margin:6px 0 0;color:var(--muted);font-size:15px">Every connection is made by your own OpenSSH. Your keys, agent and <code>~/.ssh/config</code> apply. hpctun never stores a password: its password window (menu-bar app, <code>--askpass</code>) only passes what you type on to ssh.</p></div>
+    <div class="card"><b>Little on the cluster</b><p style="margin:6px 0 0;color:var(--muted);font-size:15px">Tunnels and copies need no server, daemon or admin request: if you can ssh to the login node, hpctun works. <code>hpctun code</code> runs VS Code's server in your own Slurm job and keeps its sign-in in your cluster home.</p></div>
+    <div class="card"><b>Edits shown first</b><p style="margin:6px 0 0;color:var(--muted);font-size:15px">Changes to your ssh setup are shown as a diff and written only when you say yes, with a backup. Your own host entries are left alone.</p></div>
+    <div class="card"><b>Observed state</b><p style="margin:6px 0 0;color:var(--muted);font-size:15px"><code>status</code> looks at what is really listening every time it runs, so it can't drift from reality. Tunnels it didn't open are shown and never touched.</p></div>
+  </div>
+  <p style="margin-top:18px;color:var(--muted)">
+    Runs on macOS, Linux and Windows. On Windows, OpenSSH has no shared connection, so each tunnel is its own ssh and signs in with a key from the ssh agent; <code>hpctun login</code> checks that it can.
+  </p>
+  <p style="margin-top:18px;color:var(--muted)">Tunnel ports on your computer have no password of their own: any program on it can use them, so keep your apps' own logins on. Releases are signed, and <code>hpctun self-update</code> checks the signature before installing anything. The README's “Security notes” say more.</p>
+  <p style="margin-top:18px;color:var(--muted)">
+    hpctun is written with AI coding agents (Claude Code, with reviews by Codex) under its maintainer's direction, and had a security review before its first public release. See “How hpctun is made” in the <a href="https://github.com/davised/hpctun#how-hpctun-is-made">README</a>.
+  </p>
+</section>
+
+<!-- ================================================================= OSU -->
+<section id="osu" class="osu">
+  <p class="kicker">At Oregon State</p>
+  <h2>hpctun on the OSU HPC cluster</h2>
+  <p class="lead">
+    The release comes with <code>osu.toml</code>, which fills in OSU's hosts for you. The
+    setup wizard asks for your ONID username and little else.
+  </p>
+
+  <div class="hosts">
+    <div class="host"><div class="role" style="color:var(--login)">Login node</div><code>shell.hpc.oregonstate.edu</code><div class="t-sub" style="color:var(--muted);font-size:14px">alias <code>shell</code>: logins, jobs, tunnels</div></div>
+    <div class="host"><div class="role" style="color:var(--xfer)">Transfer node</div><code>files.hpc.oregonstate.edu</code><div style="color:var(--muted);font-size:14px">alias <code>files</code>: copies, node-local <code>/scratch</code></div></div>
+    <div class="host"><div class="role" style="color:var(--node)">Compute nodes</div>Slurm nodes such as <code>chrom1</code><div style="color:var(--muted);font-size:14px">reached through the login node</div></div>
+  </div>
+
+  <ol class="steps">
+    <li>
+      <h3>Get the release</h3>
+<pre><span class="c"># Apple silicon Mac; see the releases page for other systems</span>
+<span class="p">$ </span>v=$(curl -fsSL https://github.com/davised/hpctun/releases/latest/download/VERSION)
+<span class="p">$ </span>curl -fLO "https://github.com/davised/hpctun/releases/download/$v/hpctun-$v-darwin-arm64.tar.gz"
+<span class="p">$ </span>tar xzf hpctun-$v-darwin-arm64.tar.gz
+<span class="p">$ </span>cd hpctun-$v-darwin-arm64 &amp;&amp; mkdir -p ~/.local/bin &amp;&amp; mv hpctun ~/.local/bin/
+<span class="p">$ </span>export PATH="$HOME/.local/bin:$PATH"</pre>
+      <p style="font-size:15px;color:var(--muted)">On a Mac, <code>hpctun-tray-&lt;version&gt;-darwin-universal.zip</code> is the menu-bar app with hpctun inside. Use <code>curl</code>, not a browser: macOS blocks unsigned programs that a browser downloaded. To keep <code>~/.local/bin</code> on your PATH in new terminals, add that <code>export PATH</code> line to <code>~/.zshrc</code>.</p>
+    </li>
+    <li>
+      <h3>Set up with OSU's defaults</h3>
+<pre><span class="p">$ </span>hpctun init --from osu.toml
+<span class="p">$ </span>hpctun ssh-config key        <span class="c"># optional: log in with a key</span></pre>
+      <p style="font-size:15px;color:var(--muted)">Without a key, every new connection asks for your password and a Duo push. With a key, OSU skips Duo. <code>hpctun code</code> needs the key.</p>
+      <p style="font-size:15px;color:var(--muted)">With the menu-bar app, run <code>hpctun init --from /Applications/hpctun-tray.app/Contents/osu.toml</code>: the preset ships inside the app bundle.</p>
+    </li>
+    <li>
+      <h3>Use it</h3>
+<pre><span class="p">$ </span>hpctun up 8888 --host chrom1 --loopback   <span class="c"># Jupyter on chrom1</span>
+<span class="p">$ </span>hpctun cp chrom1:/scratch/ONID/out.tsv .  <span class="c"># a node's /scratch, via files</span>
+<span class="p">$ </span>hpctun code myproject                     <span class="c"># VS Code in a Slurm job</span></pre>
+    </li>
+  </ol>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="card">
+      <b>OSU LLM gateway from off campus, no VPN</b>
+      <p style="margin:6px 0 0;color:var(--muted);font-size:15px"><code>osu.toml</code> carries two optional tunnels (the wizard asks; or <code>hpctun add</code> later):</p>
+<pre>hpctun up llm       <span class="c"># API at http://127.0.0.1:8090/v1</span>
+hpctun browse chat  <span class="c"># the chat site, in a proxied window</span></pre>
+    </div>
+    <div class="card">
+      <b>VS Code on a compute node</b>
+      <p style="margin:6px 0 0;color:var(--muted);font-size:15px">The first time, VS Code asks you to sign in with Microsoft: use your ONID (<code>you@oregonstate.edu</code>). The first job on each node shows a one-time device code. <code>hpctun vscode-settings</code> adds recommended settings for the cluster.</p>
+    </div>
+  </div>
+  <p style="font-size:15px;color:var(--muted);margin-top:16px">
+    Staying current: <code>hpctun self-update</code> downloads the latest release from GitHub, checks that it is signed with hpctun's release key and matches its checksums, and replaces hpctun (and the menu-bar app).
+  </p>
+</section>
+
+<!-- =============================================================== START -->
+<section id="start">
+  <p class="kicker">Anywhere else</p>
+  <h2>Get started</h2>
+  <ol class="steps">
+    <li>
+      <h3>Install</h3>
+      <p>Download the archive for your computer from the <a href="https://github.com/davised/hpctun/releases">releases page</a> and put <code>hpctun</code> on your PATH, or build it with Go 1.26.9+: <code>go build -o ~/.local/bin/hpctun ./cmd/hpctun</code>. You need an OpenSSH client and <code>lsof</code>, both standard on macOS and Linux.</p>
+    </li>
+    <li>
+      <h3>Tell it about your cluster</h3>
+<pre><span class="p">$ </span>hpctun init      <span class="c"># login node, transfer node, node name patterns</span></pre>
+    </li>
+    <li>
+      <h3>Open, check, close</h3>
+<pre><span class="p">$ </span>hpctun add             <span class="c"># name a tunnel</span>
+<span class="p">$ </span>hpctun up --all
+<span class="p">$ </span>hpctun status
+<span class="p">$ </span>hpctun down --all</pre>
+    </li>
+  </ol>
+
+  <div class="table-wrap">
+  <table class="cmds">
+    <tr><td><code>hpctun up</code> / <code>down</code></td><td>Open or close tunnels, named or ad hoc. <code>up</code> is safe to re-run and restores everything after sleep.</td></tr>
+    <tr><td><code>hpctun status</code></td><td>What is open, where it goes, and how many connections use it. <code>--json</code> for scripts.</td></tr>
+    <tr><td><code>hpctun browse</code></td><td>Open a tunnel's page, or a proxied browser window.</td></tr>
+    <tr><td><code>hpctun login</code> / <code>logout</code></td><td>Open the shared connections up front, so prompts happen once.</td></tr>
+    <tr><td><code>hpctun cp</code> / <code>rsync</code> / <code>sftp</code></td><td>The real tools, hopping through the transfer node for paths on nodes.</td></tr>
+    <tr><td><code>hpctun code</code></td><td>VS Code inside a Slurm job.</td></tr>
+    <tr><td><code>hpctun ssh-config</code></td><td>Show, check and update the ssh setup; <code>key</code> sets up key logins.</td></tr>
+  </table>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  hpctun · <a href="https://github.com/davised/hpctun">GitHub</a> · BSD 3-Clause License · Developed at Oregon State University; not an official OSU service. Provided as is, without warranty.
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>

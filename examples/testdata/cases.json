@@ -1,0 +1,32 @@
+[
+  {
+    "name": "user values win, nested entries added",
+    "sources": [{"a": 1, "w": {"x": true, "y": true}}],
+    "user": "{\"a\": 5, \"w\": {\"x\": false}}",
+    "want": {"a": 5, "w": {"x": false, "y": true}}
+  },
+  {
+    "name": "site overrides and removes",
+    "sources": [{"a": 1, "b": 2, "w": {"x": true, "y": true}}, {"a": 3, "b": null, "w": {"y": null}}],
+    "user": "",
+    "want": {"a": 3, "w": {"x": true}}
+  },
+  {
+    "name": "null never removes the user's settings",
+    "sources": [{"a": null, "w": {"x": null}}],
+    "user": "{\"a\": 1, \"w\": {\"x\": 1}}",
+    "want": {"a": 1, "w": {"x": 1}}
+  },
+  {
+    "name": "only two levels are added",
+    "sources": [{"w": {"x": {"deep": true}}}],
+    "user": "{\"w\": {\"x\": {}}}",
+    "want": {"w": {"x": {}}}
+  },
+  {
+    "name": "a user value of another type is kept",
+    "sources": [{"w": {"x": true}}],
+    "user": "{\"w\": \"mine\"}",
+    "want": {"w": "mine"}
+  }
+]

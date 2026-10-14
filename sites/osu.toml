@@ -1,0 +1,35 @@
+# OSU HPC site settings. Start onboarding with:
+#   hpctun init --from osu.toml
+# The wizard offers these as defaults and asks for your username.
+gateway = "shell"
+
+[ssh]
+gateway_host  = "shell.hpc.oregonstate.edu"
+transfer      = "files"
+transfer_host = "files.hpc.oregonstate.edu"
+
+# hpctun code: VS Code on a compute node, in a Slurm job of your own. The
+# wizard asks before keeping this. Defaults: 4 CPUs, 24:00:00, Slurm's
+# default partition (a partition that takes only some accounts gets one of
+# yours), VS Code's server in /scratch, else /data; change any of them in
+# your own config.
+[code]
+
+# The OSU LLM gateway from off campus without the VPN. The wizard asks
+# before keeping these (default No); `hpctun add` adds them later too.
+#
+# llm: the gateway's API, which it serves on port 8090 to shell.hpc only.
+# Point tools at the base URL http://127.0.0.1:8090/v1.
+[tunnel.llm]
+port = 8090
+host = "ai-gateway.hpc.oregonstate.edu"
+browse = false   # an API, not a page: no "Open in browser"
+
+# chat: a SOCKS proxy for the gateway's chat site. `hpctun browse chat`
+# opens it in a browser window of its own that uses the proxy. Otherwise
+# set the browser's SOCKS5 proxy to 127.0.0.1:1080 with DNS through the
+# proxy (Firefox: "Proxy DNS when using SOCKS v5"), or give one Firefox
+# container the proxy with an extension such as Container Proxy.
+[tunnel.chat]
+socks = 1080
+url = "https://chat.ceoas.oregonstate.edu"

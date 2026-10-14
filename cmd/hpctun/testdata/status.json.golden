@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "config": "/home/me/.config/hpctun/config.toml",
+  "gateway": {
+    "dest": "gw.example.org",
+    "tunnels_only": false,
+    "mode": "managed",
+    "running": true,
+    "pid": 4242,
+    "stale": false,
+    "error": null,
+    "hints": []
+  },
+  "login": null,
+  "transfer": null,
+  "code": null,
+  "tunnels": [
+    {
+      "kind": "named",
+      "name": "jupyter",
+      "port": 4001,
+      "route": "jump",
+      "target": "aspen1:4001",
+      "state": "up",
+      "conns": 0,
+      "owner": null,
+      "warning": null,
+      "url": null,
+      "browse": true
+    },
+    {
+      "kind": "adhoc",
+      "name": null,
+      "port": 4002,
+      "route": "master",
+      "target": "aspen1:4002",
+      "state": "conflict",
+      "conns": 1,
+      "owner": "pid 999 (python3)",
+      "warning": null,
+      "url": null,
+      "browse": true
+    },
+    {
+      "kind": "named",
+      "name": "socks",
+      "port": 5005,
+      "route": "socks",
+      "target": null,
+      "state": "down",
+      "conns": null,
+      "owner": null,
+      "warning": null,
+      "url": null,
+      "browse": true
+    },
+    {
+      "kind": "external",
+      "name": null,
+      "port": 43723,
+      "route": null,
+      "target": "ssh pid 25301",
+      "state": "external",
+      "conns": 0,
+      "owner": null,
+      "warning": "opened through old-gw, not the configured gateway",
+      "url": null,
+      "browse": true
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+gateway gw.example.org: running (pid 4242, managed)
+
+NAME      PORT   ROUTE   TARGET         STATE     CONNS
+jupyter   4001   jump    aspen1:4001    up        0
+(ad-hoc)  4002   master  aspen1:4002    conflict  1
+socks     5005   socks   -              down      -
+-         43723  ?       ssh pid 25301  external  0
+
+  4002: held by pid 999 (python3)
+  43723: opened through old-gw, not the configured gateway
