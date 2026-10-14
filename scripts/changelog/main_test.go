@@ -32,6 +32,19 @@ func TestNotes(t *testing.T) {
 	}
 }
 
+func TestNotesUnwraps(t *testing.T) {
+	text := "## Unreleased\n\nA paragraph\nwrapped here.\n\n### Fixed\n\n" +
+		"- One entry\n  wrapped twice\n  over three lines.\n- Two.\n  - Nested\n    item.\n" +
+		"1. Numbered\n   item.\n\n```\ncode line\nkept\n```\n"
+	want := "A paragraph wrapped here.\n\n### Fixed\n\n" +
+		"- One entry wrapped twice over three lines.\n- Two.\n  - Nested item.\n" +
+		"1. Numbered item.\n\n```\ncode line\nkept\n```\n"
+	got, err := notes(text)
+	if err != nil || got != want {
+		t.Fatalf("notes =\n%s\nwant\n%s(err %v)", got, want, err)
+	}
+}
+
 func TestNotesAtEndOfFile(t *testing.T) {
 	got, err := notes("# Changelog\n\n## Unreleased\n\n- Only change.\n")
 	if err != nil || got != "- Only change.\n" {

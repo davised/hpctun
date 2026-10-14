@@ -6,8 +6,9 @@
 //
 //	go run ./scripts/changelog -notes
 //	    prints the Unreleased section's body: the changes since the last
-//	    release. Fails if the section is missing or has no entries, so a
-//	    release never goes out without notes.
+//	    release, with wrapped lines joined for GitHub's release page. Fails
+//	    if the section is missing or has no entries, so a release never
+//	    goes out without notes.
 //	go run ./scripts/changelog -stamp v0.20261014-2dbba6b
 //	    renames "## Unreleased" to "## <version> (<today, UTC>)" and opens
 //	    a new, empty Unreleased section above it.
@@ -95,7 +96,43 @@ func notes(text string) (string, error) {
 	if !entries {
 		return "", errors.New("the Unreleased section has no entries; add the changes since the last release")
 	}
-	return strings.TrimSpace(strings.Join(body, "\n")) + "\n", nil
+	return strings.TrimSpace(strings.Join(unwrap(body), "\n")) + "\n", nil
+}
+
+// unwrap joins each paragraph's and list item's wrapped lines into one
+// line: GitHub shows every line break in release notes as a break, so the
+// file's wrapping at 72 columns would show up ragged there. Headings, new
+// list items, blank lines and fenced code blocks are left as they are.
+func unwrap(lines []string) []string {
+	var out []string
+	fenced, joinable := false, false
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(t, "```"):
+			fenced = !fenced
+			out, joinable = append(out, l), false
+		case fenced || t == "" || strings.HasPrefix(t, "#"):
+			out, joinable = append(out, l), false
+		case joinable && !startsItem(t):
+			out[len(out)-1] += " " + t
+		default:
+			out, joinable = append(out, l), true
+		}
+	}
+	return out
+}
+
+// startsItem reports whether a trimmed line begins a list item.
+func startsItem(t string) bool {
+	if strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "* ") || strings.HasPrefix(t, "+ ") {
+		return true
+	}
+	i := 0
+	for i < len(t) && t[i] >= '0' && t[i] <= '9' {
+		i++
+	}
+	return i > 0 && i+1 < len(t) && (t[i] == '.' || t[i] == ')') && t[i+1] == ' '
 }
 
 // stamp gives the Unreleased section the version's heading and opens a new,
