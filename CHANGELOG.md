@@ -6,6 +6,8 @@ release is also its notes on the
 
 ## Unreleased
 
+## v0.20261014-b54f165 (2026-10-14)
+
 First public release.
 
 hpctun opens, closes and monitors ssh tunnels to services on an HPC
