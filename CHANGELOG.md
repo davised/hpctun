@@ -6,6 +6,8 @@ release is also its notes on the
 
 ## Unreleased
 
+## v0.20261028-188e3df (2026-10-28)
+
 ### Fixed
 
 - Lists to choose from, such as the ssh hosts in `hpctun init`, now use
