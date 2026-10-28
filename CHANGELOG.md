@@ -6,6 +6,13 @@ release is also its notes on the
 
 ## Unreleased
 
+### Fixed
+
+- Lists to choose from, such as the ssh hosts in `hpctun init`, now use
+  the height of the terminal instead of stopping at ten. When a list is
+  still too long, a line under it says how many there are and that you
+  can scroll for more.
+
 ## v0.20261014-b54f165 (2026-10-14)
 
 First public release.

@@ -72,7 +72,7 @@ func (h *HuhAsker) Input(q InputQ) (string, error) {
 		in.Suggestions(q.Suggestions)
 	}
 	answer := func() string { return cmp.Or(v, q.Default) }
-	if err := h.run(in, q.Title, answer); err != nil {
+	if err := h.run(in, nil, q.Title, answer); err != nil {
 		return "", err
 	}
 	if v == "" {
@@ -81,21 +81,61 @@ func (h *HuhAsker) Input(q InputQ) (string, error) {
 	return v, nil
 }
 
-func (h *HuhAsker) Select(q SelectQ) (string, error) {
-	v := q.Default
+// picker is a Select field and what screen needs to size it.
+type picker struct {
+	sel   *huh.Select[string]
+	opts  []Option
+	head  int // lines above the options: the title and description
+	shown int // options the field has room for
+}
+
+func newPicker(q SelectQ, v *string) *picker {
 	opts := make([]huh.Option[string], len(q.Options))
 	for i, o := range q.Options {
 		opts[i] = huh.NewOption(o.Label, o.Value)
 	}
-	s := huh.NewSelect[string]().Title(q.Title).Description(q.Description).Options(opts...).Value(&v)
+	p := &picker{opts: q.Options, head: 1}
+	if q.Description != "" {
+		p.head += lipgloss.Height(q.Description)
+	}
+	p.sel = huh.NewSelect[string]().Title(q.Title).Description(q.Description).Options(opts...).Value(v)
+	p.shown = len(opts)
 	if len(opts) > selectHeight {
 		// Height counts the title and description lines too.
-		extra := 1
-		if q.Description != "" {
-			extra += lipgloss.Height(q.Description)
-		}
-		s.Height(selectHeight + extra)
+		p.sel.Height(selectHeight + p.head)
+		p.shown = selectHeight
 	}
+	return p
+}
+
+// fit sizes the field to rows lines of the terminal: every option if they
+// fit, otherwise as many as fit beside a count line, and at least three.
+func (p *picker) fit(rows int) {
+	switch {
+	case p.head+len(p.opts) <= rows:
+		p.sel.Height(0) // as tall as its options
+		p.shown = len(p.opts)
+	default:
+		p.shown = max(rows-p.head-1, 3)
+		p.sel.Height(p.head + p.shown)
+	}
+}
+
+// status is the count line under a list longer than its room, so that the
+// options out of sight are not mistaken for none; "" when all are shown.
+// While filtering, the field's own list is what matters, so it is "" too.
+func (p *picker) status() string {
+	if p.shown >= len(p.opts) || p.sel.GetFiltering() {
+		return ""
+	}
+	v, _ := p.sel.Hovered()
+	i := slices.IndexFunc(p.opts, func(o Option) bool { return o.Value == v })
+	return fmt.Sprintf("%d of %d · ↑/↓ for more", i+1, len(p.opts))
+}
+
+func (h *HuhAsker) Select(q SelectQ) (string, error) {
+	v := q.Default
+	p := newPicker(q, &v)
 	answer := func() string {
 		for _, o := range q.Options {
 			if o.Value == v {
@@ -104,7 +144,7 @@ func (h *HuhAsker) Select(q SelectQ) (string, error) {
 		}
 		return v
 	}
-	if err := h.run(s, q.Title, answer); err != nil {
+	if err := h.run(p.sel, p, q.Title, answer); err != nil {
 		return "", err
 	}
 	return v, nil
@@ -118,20 +158,21 @@ func (h *HuhAsker) Confirm(title, description string, def bool) (bool, error) {
 		}
 		return "No"
 	}
-	if err := h.run(huh.NewConfirm().Title(title).Description(description).Value(&v), title, answer); err != nil {
+	if err := h.run(huh.NewConfirm().Title(title).Description(description).Value(&v), nil, title, answer); err != nil {
 		return false, err
 	}
 	return v, nil
 }
 
-// run asks f. title and answer describe the question once answered: an
-// inline question leaves that one line behind in place of the form.
-func (h *HuhAsker) run(f huh.Field, title string, answer func() string) error {
+// run asks f, which is pick's field when f is a Select. title and answer
+// describe the question once answered: an inline question leaves that one
+// line behind in place of the form.
+func (h *HuhAsker) run(f huh.Field, pick *picker, title string, answer func() string) error {
 	form := huh.NewForm(huh.NewGroup(f)).
 		WithShowHelp(false).
 		WithTheme(huh.ThemeFunc(func(bool) *huh.Styles { return theme(bgDark.Load()) })).
 		WithKeyMap(keyMap())
-	m := &screen{form: form, heading: h.Heading, ctx: h.ctx, full: h.FullScreen, title: title, answer: answer}
+	m := &screen{form: form, pick: pick, heading: h.Heading, ctx: h.ctx, full: h.FullScreen, title: title, answer: answer}
 	if h.FullScreen {
 		return h.ask(m) // SubmitCmd and CancelCmd stay nil: the session keeps running
 	}
@@ -317,6 +358,7 @@ func (s *session) View() tea.View {
 // screen is the Bubble Tea model around one huh form.
 type screen struct {
 	form    *huh.Form
+	pick    *picker // the form's Select, if it is one
 	heading string
 	ctx     Context
 	full    bool
@@ -347,6 +389,7 @@ func (m *screen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		bgKnown.Store(true)
 	case tea.WindowSizeMsg:
 		m.width, m.rows = msg.Width, msg.Height
+		m.fitPick()
 	case tea.KeyPressMsg:
 		if msg.String() == "esc" && !fieldUsesEsc(m.form) {
 			m.back, m.done = true, true
@@ -436,19 +479,13 @@ func (m *screen) View() tea.View {
 		v.SetContent(strings.Join(lines, "\n"))
 		return v
 	}
-	var top, bottom []string
-	if m.full {
-		if m.heading != "" {
-			top = append(top, st.heading.Render(m.heading), "")
-		}
-		if r := m.recap(st); r != "" {
-			top = append(top, r, "")
-		}
-	}
-	if m.ctx.Notice != "" {
-		bottom = append(bottom, st.notice.Width(max(m.width-2, 20)).Render(m.ctx.Notice), "")
-	}
+	top, bottom := m.above(st)
 	bottom = append(bottom, m.form.View())
+	if m.pick != nil {
+		if s := m.pick.status(); s != "" {
+			bottom = append(bottom, st.label.Render("  "+s))
+		}
+	}
 	parts := top
 	if m.full && m.ctx.Body != "" {
 		// The body gets what the rest of the frame leaves: the recap and
@@ -465,6 +502,44 @@ func (m *screen) View() tea.View {
 	m.height = lipgloss.Height(content)
 	v.SetContent(content)
 	return v
+}
+
+// above is what the frame shows above the form: top (the heading and
+// recap, full screen only) goes above the body, bottom (the notice) below it.
+func (m *screen) above(st chrome) (top, bottom []string) {
+	if m.full {
+		if m.heading != "" {
+			top = append(top, st.heading.Render(m.heading), "")
+		}
+		if r := m.recap(st); r != "" {
+			top = append(top, r, "")
+		}
+	}
+	if m.ctx.Notice != "" {
+		bottom = append(bottom, st.notice.Width(max(m.width-2, 20)).Render(m.ctx.Notice), "")
+	}
+	return top, bottom
+}
+
+// fitPick sizes a Select to the terminal. It runs before the form updates,
+// because the form lays out its fields then, not when it is drawn.
+func (m *screen) fitPick() {
+	if m.pick == nil || m.rows == 0 {
+		return
+	}
+	// The options get what the rest of the frame leaves: what is above
+	// them, and the blank line and footer below.
+	st := newChrome(bgDark.Load())
+	pre := 0
+	if top, bottom := m.above(st); len(top)+len(bottom) > 0 {
+		// Each part ends in a blank line, which the join turns into the
+		// line break before the form.
+		pre = lipgloss.Height(strings.Join(slices.Concat(top, bottom), "\n"))
+	}
+	m.pick.fit(m.rows - pre - 1 - lipgloss.Height(m.footer(st)))
+	// The form's group keeps the height it had when it was made, and would
+	// cut a taller field short.
+	m.form.WithHeight(lipgloss.Height(m.pick.sel.View()))
 }
 
 func (m *screen) recap(st chrome) string {
