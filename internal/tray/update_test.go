@@ -1,6 +1,8 @@
 package tray
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -307,4 +309,170 @@ func TestOfferSurvivesFailedStatus(t *testing.T) {
 	if view.last().Update == "" || cli.count() != 1 {
 		t.Fatalf("update %q, checks %d", view.last().Update, cli.count())
 	}
+}
+
+// offered starts an App with an offer showing, using handler for the rest.
+func offered(t *testing.T, handler func(args []string) (string, string, int)) (*App, *recorder, *updateCLI) {
+	exe := trayExe(t)
+	u := newUpdateCLI(t, checkingStatus(true), offerDoc(exe))
+	inner := u.fakeCLI.handler
+	u.fakeCLI.handler = func(args []string) (string, string, int) {
+		if args[0] == "self-update" && args[1] != "--check" {
+			return handler(args)
+		}
+		return inner(args)
+	}
+	c := &clock{t: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
+	a, view := startApp(t, u, exe, c)
+	c.add(2 * time.Minute)
+	poll(t, a)
+	if view.last().Update == "" {
+		t.Fatal("no offer")
+	}
+	return a, view, u
+}
+
+func updatedDoc(t *testing.T, updated bool) string {
+	d := offerDoc("/x/hpctun-tray")
+	d.Updated = updated
+	if !updated {
+		d.Action = "up_to_date"
+	}
+	return doc(t, d)
+}
+
+func TestUpdateRelaunches(t *testing.T) {
+	for _, updated := range []bool{true, false} {
+		var relaunched, quit int
+		a, _, u := offered(t, func(args []string) (string, string, int) { return updatedDoc(t, updated), "", 0 })
+		a.Relaunch = func() error { relaunched++; return nil }
+		a.Quit = func() { quit++ }
+		a.Update()
+		a.Wait()
+		if got := u.called("self-update --json --expect v0.20261202-4d5e6f7"); len(got) != 1 {
+			t.Fatalf("calls %q", u.calls)
+		}
+		if relaunched != 1 || quit != 1 {
+			t.Fatalf("updated=%v: relaunched %d quit %d", updated, relaunched, quit)
+		}
+	}
+}
+
+func TestUpdateFailureShowsError(t *testing.T) {
+	a, view, _ := offered(t, func(args []string) (string, string, int) {
+		return doc(t, jsondoc.Error{Version: 1, Error: jsondoc.ErrorBody{Message: "release v…: signature does not verify; nothing was changed", Exit: 1}}), "", 1
+	})
+	a.Relaunch = func() error { t.Error("relaunched after a failure"); return nil }
+	a.Quit = func() { t.Error("quit after a failure") }
+	a.Update()
+	a.Wait()
+	m := view.last()
+	if !strings.Contains(m.LastError, "signature does not verify") || m.Update != "Update to v0.20261202-4d5e6f7" || m.UpdateDisabled {
+		t.Fatalf("model %+v", m)
+	}
+}
+
+func TestRelaunchFailure(t *testing.T) {
+	a, view, _ := offered(t, func(args []string) (string, string, int) { return updatedDoc(t, true), "", 0 })
+	a.Relaunch = func() error { return errors.New("no open") }
+	a.Quit = func() { t.Error("quit although the relaunch failed") }
+	a.Update()
+	a.Wait()
+	m := view.last()
+	if m.LastError != "Updated to v0.20261202-4d5e6f7; quit and reopen hpctun-tray" || m.Update != "" {
+		t.Fatalf("model %+v", m)
+	}
+}
+
+func TestQuitDuringUpdateWaitsAndDoesNotRelaunch(t *testing.T) {
+	release := make(chan struct{})
+	a, view, _ := offered(t, func(args []string) (string, string, int) { <-release; return updatedDoc(t, true), "", 0 })
+	var quit int
+	a.Relaunch = func() error { t.Error("relaunched after Quit"); return nil }
+	a.Quit = func() { quit++ }
+	a.Update()
+	eventually(t, "updating", func() bool { return strings.HasPrefix(view.last().Update, "Updating to ") })
+	a.RequestQuit()
+	if quit != 0 {
+		t.Fatal("quit while the update ran")
+	}
+	close(release)
+	a.Wait()
+	if quit != 1 {
+		t.Fatalf("quit %d", quit)
+	}
+}
+
+func TestGate(t *testing.T) {
+	release := make(chan struct{})
+	a, view, u := offered(t, func(args []string) (string, string, int) { <-release; return updatedDoc(t, true), "", 0 })
+	a.Relaunch = func() error { return nil }
+	a.Quit = func() {}
+	a.Update()
+	eventually(t, "updating", func() bool { return strings.HasPrefix(view.last().Update, "Updating to ") })
+	a.Toggle(context.Background(), 8099)
+	a.Login(context.Background())
+	a.Browse(context.Background(), 8099)
+	a.OpenAll(context.Background())
+	m := view.last()
+	if m.CanLogin || m.CanLogout || m.CanOpenAll || (len(m.Tunnels) > 0 && !m.Tunnels[0].Disabled) {
+		t.Fatalf("actions offered during the update: %+v", m)
+	}
+	close(release)
+	a.Wait()
+	for _, p := range []string{"--askpass up", "--askpass login", "--askpass browse"} {
+		if got := u.called(p); len(got) != 0 {
+			t.Fatalf("%s ran during the update", p)
+		}
+	}
+}
+
+// The other way round: an update is not admitted while an action runs.
+func TestGateRefusesUpdateDuringAction(t *testing.T) {
+	release := make(chan struct{})
+	exe := trayExe(t)
+	u := newUpdateCLI(t, checkingStatus(true), offerDoc(exe))
+	inner := u.fakeCLI.handler
+	u.fakeCLI.handler = func(args []string) (string, string, int) {
+		if strings.HasPrefix(strings.Join(args, " "), "--askpass login") {
+			<-release
+			return "", "", 0
+		}
+		if args[0] == "self-update" && args[1] != "--check" {
+			t.Error("update ran during login")
+		}
+		return inner(args)
+	}
+	c := &clock{t: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
+	a, view := startApp(t, u, exe, c)
+	c.add(2 * time.Minute)
+	poll(t, a)
+	a.Login(context.Background())
+	if !view.last().UpdateDisabled {
+		t.Fatal("update item enabled during login")
+	}
+	a.Update()
+	close(release)
+	a.Wait()
+}
+
+// hpctun replaces its own binary during an update, so a status poll may
+// fail meanwhile; the item still shows, disabled, for the whole update.
+func TestUpdatingStaysVisibleWhenStatusFails(t *testing.T) {
+	release := make(chan struct{})
+	a, view, u := offered(t, func(args []string) (string, string, int) { <-release; return updatedDoc(t, true), "", 0 })
+	a.Relaunch = func() error { return nil }
+	a.Quit = func() {}
+	a.Update()
+	eventually(t, "updating", func() bool { return strings.HasPrefix(view.last().Update, "Updating to ") })
+	u.mu.Lock()
+	u.stFail = true
+	u.mu.Unlock()
+	poll(t, a)
+	m := view.last()
+	if m.Update != "Updating to v0.20261202-4d5e6f7…" || !m.UpdateDisabled {
+		t.Fatalf("model %+v", m)
+	}
+	close(release)
+	a.Wait()
 }

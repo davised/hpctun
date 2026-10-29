@@ -111,8 +111,9 @@ func build(s state) Model {
 	}
 	m.Tooltip = "hpctun — " + m.Header
 	// Hidden, not dropped, while status fails; it returns with the next
-	// good poll.
-	if s.offer != "" && st != nil && st.UpdateCheck {
+	// good poll. During the update it stays, since hpctun replacing its
+	// own binary may make a poll fail.
+	if s.offer != "" && (s.updating || (st != nil && st.UpdateCheck)) {
 		m.Update = "Update to " + s.offer
 		if s.updating {
 			m.Update = "Updating to " + s.offer + "…"
@@ -163,6 +164,17 @@ func build(s state) Model {
 			m.Pages = append(m.Pages, Page{Port: r.Port, Label: "Open " + name + " in browser", Disabled: it.Disabled})
 		}
 		m.CanOpenAll = true
+	}
+	if s.updating {
+		// The action gate is closed: nothing else may start before the
+		// relaunch.
+		m.CanLogin, m.CanLogout, m.CanOpenAll = false, false, false
+		for i := range m.Tunnels {
+			m.Tunnels[i].Disabled = true
+		}
+		for i := range m.Pages {
+			m.Pages[i].Disabled = true
+		}
 	}
 	m.Code = codeLine(s.code)
 	return m

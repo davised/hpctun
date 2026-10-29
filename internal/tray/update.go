@@ -3,6 +3,7 @@ package tray
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -114,3 +115,71 @@ func sameFile(a, b string) bool {
 
 // waitCheck waits for a running check; tests use it.
 func (a *App) waitCheck() { a.checks.Wait() }
+
+// Update installs the offered release: `hpctun self-update --json
+// --expect`, then a relaunch. It is refused while any other action runs,
+// and holds the gate until the tray quits. The run is never cancelled:
+// stopping hpctun between two renames could leave nothing installed.
+func (a *App) Update() {
+	a.init()
+	a.mu.Lock()
+	v := a.s.offer
+	if v == "" || a.s.updating || a.s.loginBusy || len(a.s.busy) > 0 {
+		a.mu.Unlock()
+		return
+	}
+	a.s.updating, a.s.lastErr = true, ""
+	a.s.gen++ // drop a check still running
+	a.mu.Unlock()
+	a.show()
+	a.actions.Add(1)
+	go func() {
+		defer a.actions.Done()
+		out, errb, exit, err := a.CLI.Run(context.Background(), "self-update", "--json", "--expect", v)
+		if err == nil {
+			err = errorOf(out, errb, exit)
+		}
+		var d jsondoc.Update
+		if err == nil && json.Unmarshal(out, &d) != nil {
+			err = fmt.Errorf("hpctun self-update --json: unexpected output")
+		}
+		a.mu.Lock()
+		quit := a.s.quitPending
+		a.mu.Unlock()
+		if quit {
+			a.Quit() // Quit wins: no relaunch, whatever the result
+			return
+		}
+		if err != nil {
+			a.mu.Lock()
+			a.s.updating, a.s.lastErr = false, err.Error()
+			a.mu.Unlock()
+			a.show()
+			return
+		}
+		// updated:false means someone installed v from a terminal
+		// meanwhile; the tray on disk is still newer than this one.
+		if rerr := a.Relaunch(); rerr != nil {
+			a.mu.Lock()
+			a.s.updating, a.s.offer = false, ""
+			a.s.lastErr = fmt.Sprintf("Updated to %s; quit and reopen hpctun-tray", v)
+			a.mu.Unlock()
+			a.show()
+			return
+		}
+		a.Quit()
+	}()
+}
+
+// RequestQuit quits now, or, while an update runs, when it ends.
+func (a *App) RequestQuit() {
+	a.init()
+	a.mu.Lock()
+	if a.s.updating {
+		a.s.quitPending = true
+		a.mu.Unlock()
+		return
+	}
+	a.mu.Unlock()
+	a.Quit()
+}

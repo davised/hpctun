@@ -38,6 +38,10 @@ type App struct {
 	CheckDelay time.Duration
 	started    time.Time
 	checks     sync.WaitGroup
+	// Relaunch starts the new tray after an update; Quit ends this one.
+	// cmd/hpctun-tray fills both in.
+	Relaunch func() error
+	Quit     func()
 
 	once    sync.Once
 	mu      sync.Mutex
@@ -145,7 +149,7 @@ func (a *App) Toggle(ctx context.Context, port int) {
 	a.init()
 	a.mu.Lock()
 	row, ok := a.row(port)
-	if !ok || a.s.busy[port] || row.State == "conflict" {
+	if !ok || a.s.busy[port] || row.State == "conflict" || a.s.updating {
 		a.mu.Unlock()
 		return
 	}
@@ -162,7 +166,7 @@ func (a *App) Browse(ctx context.Context, port int) {
 	a.init()
 	a.mu.Lock()
 	row, ok := a.row(port)
-	if !ok || a.s.busy[port] || row.State == "conflict" {
+	if !ok || a.s.busy[port] || row.State == "conflict" || a.s.updating {
 		a.mu.Unlock()
 		return
 	}
@@ -195,6 +199,10 @@ func (a *App) CloseAll(ctx context.Context) {
 func (a *App) all(ctx context.Context, args ...string) {
 	a.init()
 	a.mu.Lock()
+	if a.s.updating {
+		a.mu.Unlock()
+		return
+	}
 	var ports []int
 	if a.s.status != nil {
 		for _, r := range a.s.status.Tunnels {
@@ -240,7 +248,7 @@ func (a *App) Logout(ctx context.Context) { a.login(ctx, "logout") }
 func (a *App) login(ctx context.Context, verb string) {
 	a.init()
 	a.mu.Lock()
-	if a.s.loginBusy {
+	if a.s.loginBusy || a.s.updating {
 		a.mu.Unlock()
 		return
 	}
