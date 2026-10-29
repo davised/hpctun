@@ -9,13 +9,16 @@ const Version = 1
 
 // Status is `hpctun status --json`.
 type Status struct {
-	Version  int      `json:"version"`
-	Config   string   `json:"config"`
-	Gateway  *Gateway `json:"gateway"`
-	Login    *Conn    `json:"login"`
-	Transfer *Conn    `json:"transfer"`
-	Code     *Code    `json:"code"`
-	Tunnels  []Row    `json:"tunnels"`
+	Version int    `json:"version"`
+	Config  string `json:"config"`
+	// UpdateCheck is false when the config turns the tray's update check
+	// off (update_check = false).
+	UpdateCheck bool     `json:"update_check"`
+	Gateway     *Gateway `json:"gateway"`
+	Login       *Conn    `json:"login"`
+	Transfer    *Conn    `json:"transfer"`
+	Code        *Code    `json:"code"`
+	Tunnels     []Row    `json:"tunnels"`
 }
 
 // Gateway is the connection tunnels ride on; nil when none is configured.

@@ -16,16 +16,17 @@ import (
 // header is the tunnel gateway's line above the status table, and the
 // lines for the other shared connections.
 type header struct {
-	Config   string // the config file's path (--json only)
-	Dest     string
-	Tunnels  bool // Dest is a tunnel_gateway apart from the gateway
-	Mode     gateway.Mode
-	Status   gateway.Status
-	Err      error
-	Hints    []string
-	Login    *conn     // the gateway, when Tunnels
-	Transfer *conn     // nil when no transfer host is configured
-	Code     *codeLine // nil when [code] is not set
+	Config      string // the config file's path (--json only)
+	UpdateCheck bool   // --json only
+	Dest        string
+	Tunnels     bool // Dest is a tunnel_gateway apart from the gateway
+	Mode        gateway.Mode
+	Status      gateway.Status
+	Err         error
+	Hints       []string
+	Login       *conn     // the gateway, when Tunnels
+	Transfer    *conn     // nil when no transfer host is configured
+	Code        *codeLine // nil when [code] is not set
 }
 
 // gatewayConnected reports whether the gateway itself (not a tunnel gateway)

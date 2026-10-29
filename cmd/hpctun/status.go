@@ -60,7 +60,7 @@ func gatherStatus(ctx context.Context, a *app, noCode bool) (header, []tunnel.Ro
 	if err != nil {
 		return header{}, nil, failed(err)
 	}
-	h := header{Config: cfg.Path, Dest: cfg.TunnelDest(), Tunnels: cfg.TunnelGateway != ""}
+	h := header{Config: cfg.Path, UpdateCheck: !cfg.NoUpdateCheck, Dest: cfg.TunnelDest(), Tunnels: cfg.TunnelGateway != ""}
 	socket := ""
 	if a.windows() {
 		standaloneHeader(&h, cfg)

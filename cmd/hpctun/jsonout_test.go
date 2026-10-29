@@ -149,7 +149,7 @@ func TestRowDoc(t *testing.T) {
 
 func TestStatusDocEmpty(t *testing.T) {
 	got := marshal(t, statusDoc(header{}, nil))
-	want := `{"version":1,"config":"","gateway":null,"login":null,"transfer":null,"code":null,"tunnels":[]}`
+	want := `{"version":1,"config":"","update_check":false,"gateway":null,"login":null,"transfer":null,"code":null,"tunnels":[]}`
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}

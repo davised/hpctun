@@ -282,3 +282,47 @@ func TestLoadStillRequiresSSHUser(t *testing.T) {
 		t.Fatal("Parse accepted [ssh] hosts without user")
 	}
 }
+
+// update_check = false turns the tray's check off; missing or true leaves
+// it on, so the zero value of NoUpdateCheck is "check".
+func TestUpdateCheck(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		no   bool
+	}{
+		{"gateway = \"g\"\n", false},
+		{"gateway = \"g\"\nupdate_check = true\n", false},
+		{"gateway = \"g\"\nupdate_check = false\n", true},
+	} {
+		c, err := Load(writeTemp(t, "c.toml", tc.body))
+		if err != nil {
+			t.Fatalf("%q: %v", tc.body, err)
+		}
+		if c.NoUpdateCheck != tc.no {
+			t.Errorf("%q: NoUpdateCheck = %v", tc.body, c.NoUpdateCheck)
+		}
+	}
+	if c, _ := Load(filepath.Join(t.TempDir(), "none.toml")); c.NoUpdateCheck {
+		t.Error("a missing config turns checks off")
+	}
+}
+
+// A site preset's update_check = false survives init: FromConfig copies it
+// and Render writes it where TOML reads it as top-level (before any table).
+func TestRenderUpdateCheck(t *testing.T) {
+	src, err := Load(writeTemp(t, "site.toml", "gateway = \"g\"\nupdate_check = false\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := Render(FromConfig(src))
+	c, err := Load(writeTemp(t, "c.toml", out))
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !c.NoUpdateCheck {
+		t.Fatalf("update_check lost:\n%s", out)
+	}
+	if strings.Contains(Render(NewConfig{Gateway: "g"}), "update_check") {
+		t.Fatal("the default config mentions update_check")
+	}
+}

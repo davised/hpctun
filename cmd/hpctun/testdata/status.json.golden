@@ -1,6 +1,7 @@
 {
   "version": 1,
   "config": "/home/me/.config/hpctun/config.toml",
+  "update_check": true,
   "gateway": {
     "dest": "gw.example.org",
     "tunnels_only": false,

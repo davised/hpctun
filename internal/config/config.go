@@ -47,6 +47,9 @@ type Config struct {
 	SSH           *SSH     // nil when the file has no [ssh] table
 	Code          *Code    // nil when the file has no [code] table
 	VSCode        *VSCode  // nil when the file has no [vscode] table
+	// NoUpdateCheck is update_check = false: hpctun-tray does not look for
+	// new releases. The zero value keeps checks on, as with no config.
+	NoUpdateCheck bool
 }
 
 // TunnelDest is the ssh destination tunnels go through: tunnel_gateway when
@@ -105,6 +108,7 @@ type rawConfig struct {
 	SSH           *rawSSH              `toml:"ssh"`
 	Code          *rawCode             `toml:"code"`
 	VSCode        *rawVSCode           `toml:"vscode"`
+	UpdateCheck   *bool                `toml:"update_check"`
 }
 
 var nameRE = regexp.MustCompile(`^[a-z0-9_][a-z0-9_-]*$`)
@@ -248,7 +252,7 @@ func parse(data []byte, seed bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Config{Gateway: raw.Gateway, TunnelGateway: raw.TunnelGateway, DefaultHost: raw.DefaultHost, SSH: s, Code: code, VSCode: vs}
+	c := &Config{Gateway: raw.Gateway, TunnelGateway: raw.TunnelGateway, DefaultHost: raw.DefaultHost, SSH: s, Code: code, VSCode: vs, NoUpdateCheck: raw.UpdateCheck != nil && !*raw.UpdateCheck}
 	byPort := map[int]string{}
 	for _, name := range slices.Sorted(maps.Keys(raw.Tunnel)) {
 		t, err := resolve(name, raw.Tunnel[name], raw.DefaultHost)

@@ -86,11 +86,12 @@ type NewConfig struct {
 	SSH           *SSH
 	Code          *Code
 	VSCode        *VSCode
+	NoUpdateCheck bool
 }
 
 // FromConfig converts a loaded config into a NewConfig, for seeding init.
 func FromConfig(c *Config) NewConfig {
-	return NewConfig{Gateway: c.Gateway, TunnelGateway: c.TunnelGateway, DefaultHost: c.DefaultHost, Tunnels: append([]Tunnel(nil), c.Tunnels...), SSH: cloneSSH(c.SSH), Code: cloneCode(c.Code), VSCode: cloneVSCode(c.VSCode)}
+	return NewConfig{Gateway: c.Gateway, TunnelGateway: c.TunnelGateway, DefaultHost: c.DefaultHost, Tunnels: append([]Tunnel(nil), c.Tunnels...), SSH: cloneSSH(c.SSH), Code: cloneCode(c.Code), VSCode: cloneVSCode(c.VSCode), NoUpdateCheck: c.NoUpdateCheck}
 }
 
 func cloneSSH(s *SSH) *SSH {
@@ -117,6 +118,10 @@ func Render(nc NewConfig) string {
 		b.WriteString("# default_host = \"\"\n")
 	} else {
 		fmt.Fprintf(&b, "default_host = %s\n", strconv.Quote(nc.DefaultHost))
+	}
+	if nc.NoUpdateCheck {
+		// Top-level keys must come before the first table.
+		b.WriteString("\n# hpctun-tray does not look for new releases.\nupdate_check = false\n")
 	}
 	if nc.SSH != nil {
 		b.WriteString("\n# What hpctun writes to ~/.ssh/hpctun_config; see `hpctun ssh-config`.\n")

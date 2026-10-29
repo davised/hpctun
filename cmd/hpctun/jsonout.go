@@ -35,7 +35,7 @@ func pidOrNil(s gateway.Status) *int {
 }
 
 func statusDoc(h header, rows []tunnel.Row) jsondoc.Status {
-	doc := jsondoc.Status{Version: jsondoc.Version, Config: h.Config, Login: connDoc(h.Login), Transfer: connDoc(h.Transfer), Code: codeDoc(h.Code), Tunnels: []jsondoc.Row{}}
+	doc := jsondoc.Status{Version: jsondoc.Version, Config: h.Config, UpdateCheck: h.UpdateCheck, Login: connDoc(h.Login), Transfer: connDoc(h.Transfer), Code: codeDoc(h.Code), Tunnels: []jsondoc.Row{}}
 	if h.Dest != "" {
 		doc.Gateway = &jsondoc.Gateway{
 			Dest: h.Dest, TunnelsOnly: h.Tunnels, Mode: strOrNil(string(h.Mode)),

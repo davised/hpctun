@@ -25,7 +25,7 @@ func plain(s string) string {
 }
 
 func TestRenderStatusGolden(t *testing.T) {
-	h := header{Config: "/home/me/.config/hpctun/config.toml", Dest: "gw.example.org", Mode: gateway.ModeManaged, Status: gateway.Status{Running: true, PID: 4242}}
+	h := header{Config: "/home/me/.config/hpctun/config.toml", UpdateCheck: true, Dest: "gw.example.org", Mode: gateway.ModeManaged, Status: gateway.Status{Running: true, PID: 4242}}
 	rows := []tunnel.Row{
 		{Kind: tunnel.KindNamed, Name: "jupyter", Port: 4001, Route: "jump", Target: "aspen1:4001", State: tunnel.StateUp, Conns: 0},
 		{Kind: tunnel.KindAdhoc, Name: "(ad-hoc)", Port: 4002, Route: "master", Target: "aspen1:4002", State: tunnel.StateConflict, Conns: 1, Owner: "pid 999 (python3)"},
