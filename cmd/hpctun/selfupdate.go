@@ -39,7 +39,7 @@ func newSelfUpdateCmd(a *app) *cobra.Command {
 	cmd.Flags().BoolVar(&check, "check", false, "say what would happen and change nothing")
 	cmd.Flags().BoolVar(&force, "force", false, "reinstall the same version, or replace a development build")
 	cmd.Flags().BoolVar(&asJSON, "json", false, jsonFlagUsage)
-	cmd.Flags().StringVar(&expect, "expect", "", "update only if the latest release is this version and newer than hpctun (for hpctun-tray)")
+	cmd.Flags().StringVar(&expect, "expect", "", "update only to this version, and only if it is newer than hpctun (succeeds without change if already there; for hpctun-tray)")
 	return cmd
 }
 
@@ -133,7 +133,9 @@ func runSelfUpdate(ctx context.Context, a *app, o updateOpts) error {
 	// One update of an install at a time: a tray click and a terminal
 	// update would otherwise delete each other's .old. The system drops
 	// the lock when hpctun exits, crash included.
-	lf, err := os.OpenFile(inst.Target()+".update-lock", os.O_CREATE|os.O_RDWR, 0o600)
+	// The lock file is hidden so it does not show up next to the install.
+	lockTarget := inst.Target()
+	lf, err := os.OpenFile(filepath.Join(filepath.Dir(lockTarget), "."+filepath.Base(lockTarget)+".update-lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return failed(fmt.Errorf("can't replace %s: %w", inst.Target(), err))
 	}
@@ -254,6 +256,11 @@ func runSelfUpdate(ctx context.Context, a *app, o updateOpts) error {
 		// The tray first: if hpctun's swap then fails, hpctun is still old,
 		// so the next update does both again.
 		if err = replace(inst.Tray, newTray, a.windows()); err != nil {
+			if a.windows() {
+				// A tray still running from an earlier update sits in its
+				// .old, which Windows will not let us clear.
+				err = fmt.Errorf("%w; quit hpctun-tray, open it again, and try the update again", err)
+			}
 			break
 		}
 		if err = replace(inst.Exe, newExe, a.windows()); err != nil && a.windows() {
@@ -279,6 +286,9 @@ func runSelfUpdate(ctx context.Context, a *app, o updateOpts) error {
 		verb = "downgraded"
 	}
 	fmt.Fprintf(a.stdout, "hpctun %s to %s\n", verb, latest)
+	if inst.Kind == selfupdate.PlainWithTray && a.windows() {
+		fmt.Fprintln(a.stdout, "If hpctun-tray is running, quit it and open it again to use the new version.")
+	}
 	if inst.Kind != selfupdate.Plain && !a.windows() {
 		if r, err := a.runner().Run(ctx, "pgrep", "-x", "hpctun-tray"); err == nil && r.ExitCode == 0 {
 			fmt.Fprintln(a.stdout, "hpctun-tray is still running the old version; quit and reopen it")

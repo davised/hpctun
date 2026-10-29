@@ -628,7 +628,7 @@ func TestSelfUpdateLockHeld(t *testing.T) {
 	exe := filepath.Join(t.TempDir(), "bin", exeName())
 	a, _ := updateApp(t, exe, src, false)
 	real, _ := filepath.EvalSymlinks(exe)
-	f, err := os.OpenFile(real+".update-lock", os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(filepath.Dir(real), "."+filepath.Base(real)+".update-lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -744,5 +744,41 @@ func TestSelfUpdateWindowsUndoesTrayWhenHpctunFails(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(exe); string(b) != "old hpctun" {
 		t.Fatalf("hpctun = %q", b)
+	}
+}
+
+func TestSelfUpdateWindowsTrayHint(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("no Windows release for this arch")
+	}
+	const hint = "If hpctun-tray is running, quit it and open it again"
+	for _, asJSON := range []bool{false, true} {
+		_, exe, _ := windowsInstall(t)
+		a, out := updateApp(t, exe, &fakeSource{latest: newVer, files: windowsRelease(t)}, false)
+		a.goos = "windows"
+		args := []string{"self-update"}
+		if asJSON {
+			args = append(args, "--json")
+		}
+		if err := runCmd(a, args...); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(out.String(), hint); got == asJSON {
+			t.Errorf("json=%v: hint present = %v in %q", asJSON, got, out)
+		}
+	}
+}
+
+func TestSelfUpdateWindowsTrayReplaceFails(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("no Windows release for this arch")
+	}
+	_, exe, _ := windowsInstall(t)
+	a, _ := updateApp(t, exe, &fakeSource{latest: newVer, files: windowsRelease(t)}, false)
+	a.goos = "windows"
+	a.replace = func(old, _ string, _ bool) error { return errors.New("Access is denied") }
+	err := runCmd(a, "self-update")
+	if err == nil || !strings.Contains(err.Error(), "Access is denied") || !strings.Contains(err.Error(), "quit hpctun-tray, open it again") {
+		t.Fatalf("err %v", err)
 	}
 }

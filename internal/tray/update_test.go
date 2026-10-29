@@ -377,6 +377,29 @@ func TestUpdateFailureShowsError(t *testing.T) {
 	}
 }
 
+// A failed install may mean the offer is stale, so the next poll checks
+// again and shows what the check finds.
+func TestUpdateFailureRechecksAtNextPoll(t *testing.T) {
+	a, view, u := offered(t, func(args []string) (string, string, int) {
+		return doc(t, jsondoc.Error{Version: 1, Error: jsondoc.ErrorBody{Message: "the latest release is now v0.20261203-aaaaaaa; nothing was changed", Exit: 1}}), "", 1
+	})
+	a.Relaunch = func() error { t.Error("relaunched after a failure"); return nil }
+	a.Quit = func() { t.Error("quit after a failure") }
+	before := u.count()
+	a.Update()
+	a.Wait()
+	u.mu.Lock()
+	u.upd.Latest = "v0.20261203-aaaaaaa"
+	u.mu.Unlock()
+	poll(t, a)
+	if got := view.last().Update; got != "Update to v0.20261203-aaaaaaa" {
+		t.Fatalf("item %q", got)
+	}
+	if got := u.count() - before; got != 1 {
+		t.Fatalf("%d more checks, want 1", got)
+	}
+}
+
 func TestRelaunchFailure(t *testing.T) {
 	a, view, _ := offered(t, func(args []string) (string, string, int) { return updatedDoc(t, true), "", 0 })
 	a.Relaunch = func() error { return errors.New("no open") }

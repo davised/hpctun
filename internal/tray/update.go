@@ -154,6 +154,8 @@ func (a *App) Update() {
 			// quitPending: a Quit clicked later quits at once, and one
 			// clicked earlier was seen above.
 			a.s.updating, a.s.lastErr = false, err.Error()
+			// Check again at the next poll: the failure may mean the offer is stale.
+			a.s.next = a.now()
 			a.mu.Unlock()
 			a.show()
 			return
