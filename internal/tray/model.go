@@ -3,6 +3,7 @@ package tray
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"hpctun/internal/jsondoc"
 )
@@ -46,6 +47,9 @@ type Model struct {
 	Code       string // the code job line; "" hides it
 	LastError  string // "" hides it
 	Config     string // config file to open; "" disables Open config
+
+	Update         string // "Update to v…" or "Updating to v…"; "" hides it
+	UpdateDisabled bool
 }
 
 // state is what the controller knows, from which Build makes a Model.
@@ -56,6 +60,15 @@ type state struct {
 	busy      map[int]bool
 	loginBusy bool
 	lastErr   string
+
+	offer       string    // the release the menu offers; "" for none
+	checking    bool      // a check is running
+	gen         int       // bumped to drop a running check's result
+	next        time.Time // when the next check is due; zero until the first
+	lastTry     time.Time // when the last check started, to notice a clock set back
+	updating    bool      // the update runs; the action gate is closed
+	quitPending bool      // Quit was clicked during the update
+	polls       int       // finished polls; tests wait on it
 }
 
 // maxLine keeps menu lines from stretching across the screen.
@@ -97,6 +110,14 @@ func build(s state) Model {
 		m.Header += " …"
 	}
 	m.Tooltip = "hpctun — " + m.Header
+	if s.offer != "" {
+		m.Update = "Update to " + s.offer
+		if s.updating {
+			m.Update = "Updating to " + s.offer + "…"
+		}
+		m.UpdateDisabled = s.updating || s.loginBusy || len(s.busy) > 0
+		m.Tooltip += " (update available)"
+	}
 	if st == nil {
 		return m
 	}

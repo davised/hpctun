@@ -29,6 +29,16 @@ type App struct {
 	// wait on a password dialog or a phone push, so it gets longer.
 	StatusTimeout, ActionTimeout time.Duration
 
+	// Exe is the running tray's own path, recorded at startup: an update
+	// is offered only when it replaces this file.
+	Exe string
+	// Now is the wall clock; tests set it. CheckDelay is how long after
+	// start the first update check waits (default one minute).
+	Now        func() time.Time
+	CheckDelay time.Duration
+	started    time.Time
+	checks     sync.WaitGroup
+
 	once    sync.Once
 	mu      sync.Mutex
 	render  sync.Mutex
@@ -56,6 +66,10 @@ func (a *App) defaults() {
 	if a.ActionTimeout == 0 {
 		a.ActionTimeout = 3 * time.Minute
 	}
+	if a.CheckDelay == 0 {
+		a.CheckDelay = time.Minute
+	}
+	a.started = a.now()
 }
 
 // Run polls until ctx ends. Polls never overlap: the next starts after the
@@ -100,6 +114,10 @@ func (a *App) poll(ctx context.Context, code bool) {
 	}
 	a.mu.Unlock()
 	a.show()
+	a.maybeCheck()
+	a.mu.Lock()
+	a.s.polls++
+	a.mu.Unlock()
 }
 
 // Refresh asks for a poll now.
