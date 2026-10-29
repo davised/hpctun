@@ -23,7 +23,13 @@ func (a *App) now() time.Time {
 // status poll, so sleep cannot stretch the schedule.
 func (a *App) maybeCheck() {
 	a.mu.Lock()
-	if st := a.s.status; st == nil || !st.UpdateCheck {
+	if a.s.status == nil {
+		// A failed poll says nothing about the setting: keep the offer
+		// (the menu hides it meanwhile) and start no check.
+		a.mu.Unlock()
+		return
+	}
+	if !a.s.status.UpdateCheck {
 		hide := a.s.offer != "" && !a.s.updating
 		if hide {
 			a.s.offer = ""

@@ -110,7 +110,9 @@ func build(s state) Model {
 		m.Header += " …"
 	}
 	m.Tooltip = "hpctun — " + m.Header
-	if s.offer != "" {
+	// Hidden, not dropped, while status fails; it returns with the next
+	// good poll.
+	if s.offer != "" && st != nil && st.UpdateCheck {
 		m.Update = "Update to " + s.offer
 		if s.updating {
 			m.Update = "Updating to " + s.offer + "…"

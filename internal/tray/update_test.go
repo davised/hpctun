@@ -28,6 +28,7 @@ type updateCLI struct {
 	st     *jsondoc.Status
 	upd    *jsondoc.Update
 	fail   bool
+	stFail bool
 	checks int
 	*fakeCLI
 }
@@ -40,6 +41,9 @@ func newUpdateCLI(t *testing.T, st *jsondoc.Status, upd *jsondoc.Update) *update
 		a := strings.Join(args, " ")
 		switch {
 		case strings.HasPrefix(a, "status --json"):
+			if u.stFail {
+				return "", "ERROR  cannot reach hpctun", 1
+			}
 			return doc(t, u.st), "", 0
 		case a == "self-update --check --json":
 			u.checks++
@@ -265,5 +269,33 @@ func TestLateCheckDropped(t *testing.T) {
 	a.waitCheck()
 	if view.last().Update != "" {
 		t.Fatal("a late check's offer was shown")
+	}
+}
+
+// A failed status poll hides the offer without dropping it or checking
+// again; the next good poll brings it back.
+func TestOfferSurvivesFailedStatus(t *testing.T) {
+	exe := trayExe(t)
+	cli := newUpdateCLI(t, checkingStatus(true), offerDoc(exe))
+	c := &clock{t: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
+	a, view := startApp(t, cli, exe, c)
+	c.add(2 * time.Minute)
+	poll(t, a)
+	if view.last().Update == "" {
+		t.Fatal("no offer to begin with")
+	}
+	cli.mu.Lock()
+	cli.stFail = true
+	cli.mu.Unlock()
+	poll(t, a)
+	if view.last().Update != "" {
+		t.Fatal("offer shown while status fails")
+	}
+	cli.mu.Lock()
+	cli.stFail = false
+	cli.mu.Unlock()
+	poll(t, a)
+	if view.last().Update == "" || cli.count() != 1 {
+		t.Fatalf("update %q, checks %d", view.last().Update, cli.count())
 	}
 }
