@@ -27,7 +27,7 @@ func main() {
 	}
 	home, _ := os.UserHomeDir()
 	auto := tray.Autostart{GOOS: runtime.GOOS, Home: home, ConfigHome: os.Getenv("XDG_CONFIG_HOME"), Exe: exe}
-	if err := run(tray.ExecCLI{Path: path}, auto); err != nil {
+	if err := run(tray.ExecCLI{Path: path}, auto, exe, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "hpctun-tray:", err)
 		os.Exit(1)
 	}

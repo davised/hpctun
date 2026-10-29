@@ -15,11 +15,14 @@ import (
 // platform's tray handles, rather than added and removed.
 const slots = 24
 
-func run(cli tray.CLI, auto tray.Autostart) error {
+func run(cli tray.CLI, auto tray.Autostart, exe string, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	v := &view{auto: auto, icon: -1}
-	app := &tray.App{CLI: cli, View: v}
+	app := &tray.App{CLI: cli, View: v, Exe: exe,
+		Relaunch: func() error { return relaunch(runtime.GOOS, exe, args) },
+		Quit:     trayQuit,
+	}
 	v.app = app
 	trayRun(func() { v.build(ctx); go app.Run(ctx) }, cancel)
 	return nil
@@ -39,6 +42,7 @@ type view struct {
 	code                  *menuItem
 	lastErr               *menuItem
 	openConfig, startUp   *menuItem
+	update                *menuItem
 	quit                  *menuItem
 
 	mu        sync.Mutex
@@ -84,6 +88,8 @@ func (v *view) build(ctx context.Context) {
 	v.lastErr.Hide()
 	v.openConfig = addMenuItem("Open config", "Edit hpctun's config file")
 	v.startUp = addMenuItemCheckbox("Start at login", "Start hpctun-tray when you log in", v.auto.Enabled())
+	v.update = addMenuItem("", "Download and install the new hpctun, then restart hpctun-tray; tunnels stay open")
+	v.update.Hide()
 	v.quit = addMenuItem("Quit", "Quit hpctun-tray; tunnels stay open")
 
 	on := func(item *menuItem, f func()) {
@@ -144,7 +150,8 @@ func (v *view) build(ctx context.Context) {
 			v.startUp.Uncheck()
 		}
 	})
-	on(v.quit, trayQuit)
+	on(v.update, v.app.Update)
+	on(v.quit, v.app.RequestQuit)
 }
 
 // Render shows m. It only touches items whose content changed.
@@ -210,6 +217,13 @@ func (v *view) Render(m tray.Model) {
 	enableIf(v.closeAll, m.CanOpenAll)
 	setLine(v.code, m.Code)
 	setLine(v.lastErr, m.LastError)
+	if m.Update == "" {
+		v.update.Hide()
+	} else {
+		v.update.SetTitle(m.Update)
+		enableIf(v.update, !m.UpdateDisabled)
+		v.update.Show()
+	}
 	v.config = m.Config
 	enableIf(v.openConfig, m.Config != "")
 }
