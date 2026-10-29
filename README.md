@@ -100,11 +100,20 @@ needed). Before replacing anything it checks that the release's SHA256SUMS
 is signed with hpctun's release key (the public half is built into
 hpctun), that the download matches SHA256SUMS, and that the new hpctun
 runs. A release without a valid signature is refused, and nothing is
-changed. With `hpctun-tray` next to
-`hpctun`, both are updated; on a Mac with the tray app, the whole app is.
+changed. With `hpctun-tray` next to `hpctun` (Linux and Windows), both
+are updated; on a Mac with the tray app, the whole app is.
 If the latest release is older than yours (it was rolled back),
 self-update moves you back to it and says so. A build from a checkout is
 only replaced with `--force`.
+
+`hpctun-tray` checks for a new release once a day (and a minute after it
+starts) and, when there is one, shows **Update to v…** in its menu. Click
+it to install the update; the tray restarts as the new version and open
+tunnels stay open. Nothing is installed without the click. To stop the
+tray from checking, set `update_check = false` in the config; `hpctun
+self-update` still works. `hpctun self-update --json` prints the result
+as JSON, and `--expect <version>` updates only to that version; the tray
+uses both.
 
 What changed in each release is in [CHANGELOG.md](CHANGELOG.md) and on
 the [releases page](https://github.com/davised/hpctun/releases).
@@ -202,6 +211,7 @@ Top-level fields:
 | `gateway` | For `up`; not for `status` | ssh destination of the gateway. |
 | `tunnel_gateway` | No | ssh destination tunnels go through (up, down, status); defaults to gateway. See "Tunnels on their own connection". |
 | `default_host` | No | Target host when a tunnel has no `host`. |
+| `update_check` | No | `false` stops hpctun-tray from checking for new releases. Default `true`. |
 
 Per-tunnel fields (`[tunnel.<name>]`; names match `[a-z0-9_-]+`):
 
@@ -443,6 +453,8 @@ hpctun --askpass up --json jupyter
 tray. Its icon says whether you are logged in to the gateway: a filled
 disc when every tunnel is up, half filled when some are down, an empty
 ring when you are not logged in, struck through when something is wrong.
+When a new release is out, the menu offers **Update to v…**; see
+[Updating](#updating).
 Its menu has:
 
 - Your transfer host (such as `files`), and the login gateway when tunnels

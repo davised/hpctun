@@ -6,6 +6,21 @@ release is also its notes on the
 
 ## Unreleased
 
+### Added
+
+- `hpctun-tray` checks for a new release once a day and offers
+  **Update to v…** in its menu; one click installs it and restarts the
+  tray, with tunnels left open. `update_check = false` in the config
+  turns the check off.
+- `hpctun self-update --json` prints the result as JSON, and
+  `--expect <version>` updates only to that version.
+
+### Changed
+
+- `hpctun self-update` refuses to run while another update of the same
+  install is running, and Ctrl-C no longer interrupts it while it swaps
+  files.
+
 ### Fixed
 
 - On Windows, `hpctun self-update` now also updates `hpctun-tray.exe`;
