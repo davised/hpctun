@@ -125,3 +125,21 @@ type ErrorBody struct {
 	Message string `json:"message"`
 	Exit    int    `json:"exit"`
 }
+
+// Update is `hpctun self-update --json`, with or without --check.
+type Update struct {
+	Version int           `json:"version"`
+	Running string        `json:"running"`
+	Latest  string        `json:"latest"`
+	Action  string        `json:"action"` // update, downgrade or up_to_date
+	Install UpdateInstall `json:"install"`
+	Blocked *string       `json:"blocked"` // why this install cannot update itself
+	Updated bool          `json:"updated"` // a real run replaced the install
+}
+
+// UpdateInstall is what an update replaces.
+type UpdateInstall struct {
+	Kind   string  `json:"kind"`   // plain, plain_with_tray or app
+	Target string  `json:"target"` // the install as a whole: the app, or hpctun
+	Tray   *string `json:"tray"`   // the tray program replaced, symlinks resolved
+}

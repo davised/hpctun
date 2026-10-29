@@ -49,24 +49,26 @@ type app struct {
 	migrateSkipHint   bool
 
 	// Test seams; nil means the real thing.
-	run        sshctl.Runner                              // processes hpctun runs and waits for
-	exec       func(argv []string) error                  // replaces hpctun with another program
-	interact   func(argv []string, stdin io.Reader) error // programs that prompt on the terminal
-	ask        prompt.Asker                               // questions
-	tty        *bool                                      // whether hpctun may prompt
-	executable func() (string, error)                     // hpctun's own path, for the askpass script; nil: os.Executable
-	stream     slurmjob.Exec                              // remote scripts with stdin and live stderr; nil: streamExec
-	codeBin    func() (string, bool)                      // VS Code's launcher; nil: vscode.Find
-	spinTo     io.Writer                                  // where hpctun code's spinner draws; nil: the terminal, if any
-	dialog     askpass.Runner                             // askpass dialogs; nil: runDialog
-	lookPath   func(string) (string, error)               // nil: exec.LookPath
-	start      func(argv []string) error                  // starts a browser without waiting; nil: browser.StartDetached
-	ver        func() string                              // hpctun's version; nil: version()
-	updates    selfupdate.Source                          // release source; nil: GitHub releases
-	updateKey  string                                     // base64 release public key; "": selfupdate.ReleasePublicKey
-	ident      func(pid int) (proc.Info, bool)            // a pid's program and start time; nil: proc.Lookup
-	kill       func(pid int) error                        // ends a just-started ssh; nil: tunnel.KillTERM
-	terminate  func(pid int, started time.Time) error     // ends a tunnel's ssh, verified on its handle; nil: proc.Terminate
+	run        sshctl.Runner                                 // processes hpctun runs and waits for
+	exec       func(argv []string) error                     // replaces hpctun with another program
+	interact   func(argv []string, stdin io.Reader) error    // programs that prompt on the terminal
+	ask        prompt.Asker                                  // questions
+	tty        *bool                                         // whether hpctun may prompt
+	executable func() (string, error)                        // hpctun's own path, for the askpass script; nil: os.Executable
+	stream     slurmjob.Exec                                 // remote scripts with stdin and live stderr; nil: streamExec
+	codeBin    func() (string, bool)                         // VS Code's launcher; nil: vscode.Find
+	spinTo     io.Writer                                     // where hpctun code's spinner draws; nil: the terminal, if any
+	dialog     askpass.Runner                                // askpass dialogs; nil: runDialog
+	lookPath   func(string) (string, error)                  // nil: exec.LookPath
+	start      func(argv []string) error                     // starts a browser without waiting; nil: browser.StartDetached
+	ver        func() string                                 // hpctun's version; nil: version()
+	updates    selfupdate.Source                             // release source; nil: GitHub releases
+	updateKey  string                                        // base64 release public key; "": selfupdate.ReleasePublicKey
+	updatePrep time.Duration                                 // limit on downloading and checking an update; 0 means 10 minutes
+	replace    func(old, newPath string, windows bool) error // nil means selfupdate.Replace; tests make it fail
+	ident      func(pid int) (proc.Info, bool)               // a pid's program and start time; nil: proc.Lookup
+	kill       func(pid int) error                           // ends a just-started ssh; nil: tunnel.KillTERM
+	terminate  func(pid int, started time.Time) error        // ends a tunnel's ssh, verified on its handle; nil: proc.Terminate
 
 	spin *spinner // hpctun code's progress line while it runs; nil: none
 }

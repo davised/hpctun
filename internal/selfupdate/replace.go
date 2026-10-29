@@ -46,13 +46,13 @@ func Replace(old, newPath string, windows bool) error {
 // CleanOld removes what an earlier Replace left at path.old.
 func CleanOld(path string) { os.RemoveAll(path + ".old") }
 
-// Undo reverts a Replace that renamed old aside: the replacement at old is
-// deleted and old.old put back. On Windows the old file may be the running
-// tray; Windows lets a running .exe be renamed, so this works.
+// Undo reverts a Replace that renamed old aside: old.old is renamed back over
+// the replacement at old. Rename replaces an existing file on Unix and on
+// Windows, so the replacement is not deleted first; a failed rename then
+// leaves the new file in place rather than nothing. On Windows the old file
+// may be the running tray; Windows lets a running .exe be renamed, so this
+// works.
 func Undo(old string) error {
-	if err := os.Remove(old); err != nil {
-		return fmt.Errorf("can't put back %s: %w", old, err)
-	}
 	if err := os.Rename(old+".old", old); err != nil {
 		return fmt.Errorf("can't put back %s: %w", old, err)
 	}

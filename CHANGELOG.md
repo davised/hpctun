@@ -6,6 +6,11 @@ release is also its notes on the
 
 ## Unreleased
 
+### Fixed
+
+- On Windows, `hpctun self-update` now also updates `hpctun-tray.exe`;
+  before, the tray stayed on the version first installed.
+
 ## v0.20261028-188e3df (2026-10-28)
 
 ### Fixed

@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,7 +14,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"hpctun/internal/filelock"
+	"hpctun/internal/jsondoc"
 	"hpctun/internal/selfupdate"
 	"hpctun/internal/selfupdate/selfupdatetest"
 	"hpctun/internal/sshctl"
@@ -482,5 +486,263 @@ func TestSelfUpdateTrayNextToHpctunOutsideLinux(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "hpctun-tray")); string(b) != "my tray" {
 		t.Fatalf("tray = %q", b)
+	}
+}
+
+func updateDoc(t *testing.T, out string) jsondoc.Update {
+	t.Helper()
+	var d jsondoc.Update
+	if err := json.Unmarshal([]byte(out), &d); err != nil {
+		t.Fatalf("not an update document: %v\n%s", err, out)
+	}
+	return d
+}
+
+func TestSelfUpdateCheckJSON(t *testing.T) {
+	src := &fakeSource{latest: newVer}
+	exe := filepath.Join(t.TempDir(), "bin", exeName())
+	a, out := updateApp(t, exe, src, false)
+	if err := runCmd(a, "self-update", "--check", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	d := updateDoc(t, out.String())
+	real, _ := filepath.EvalSymlinks(exe)
+	if d.Version != 1 || d.Running != oldVer || d.Latest != newVer || d.Action != "update" ||
+		d.Blocked != nil || d.Updated || d.Install.Kind != "plain" || d.Install.Target != real || d.Install.Tray != nil {
+		t.Fatalf("doc %+v", d)
+	}
+	// The probe left nothing behind.
+	entries, _ := os.ReadDir(filepath.Dir(exe))
+	if len(entries) != 1 {
+		t.Fatalf("dir has %d entries", len(entries))
+	}
+}
+
+func TestSelfUpdateCheckJSONBlocked(t *testing.T) {
+	src := &fakeSource{latest: newVer}
+	a, out := updateApp(t, filepath.Join(t.TempDir(), "bin", exeName()), src, false)
+	a.ver = func() string { return "v0-dev" }
+	if err := runCmd(a, "self-update", "--check", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	d := updateDoc(t, out.String())
+	if d.Action != "update" || d.Blocked == nil || !strings.Contains(*d.Blocked, "development build") {
+		t.Fatalf("doc %+v", d)
+	}
+}
+
+func TestSelfUpdateCheckJSONUnwritable(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs Unix permissions and a non-root user")
+	}
+	src := &fakeSource{latest: newVer}
+	exe := filepath.Join(t.TempDir(), "bin", exeName())
+	a, out := updateApp(t, exe, src, false)
+	os.Chmod(filepath.Dir(exe), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Dir(exe), 0o755) })
+	if err := runCmd(a, "self-update", "--check", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	if d := updateDoc(t, out.String()); d.Blocked == nil || !strings.Contains(*d.Blocked, "can't write") {
+		t.Fatalf("doc %+v", d)
+	}
+}
+
+// --check changes nothing: it no longer cleans an earlier update's .old,
+// which a running update may still need.
+func TestSelfUpdateCheckLeavesOld(t *testing.T) {
+	src := &fakeSource{latest: newVer}
+	exe := filepath.Join(t.TempDir(), "bin", exeName())
+	a, _ := updateApp(t, exe, src, false)
+	os.WriteFile(exe+".old", []byte("backup"), 0o755)
+	if err := runCmd(a, "self-update", "--check"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(exe + ".old"); err != nil {
+		t.Fatalf(".old removed by --check: %v", err)
+	}
+}
+
+func TestSelfUpdateJSONUpdated(t *testing.T) {
+	src := &fakeSource{latest: newVer, files: release(t, false, false)}
+	exe := filepath.Join(t.TempDir(), "bin", exeName())
+	a, out := updateApp(t, exe, src, false)
+	if err := runCmd(a, "self-update", "--json", "--expect", newVer); err != nil {
+		t.Fatal(err)
+	}
+	// Only the document: no progress lines on stdout.
+	if d := updateDoc(t, out.String()); !d.Updated || d.Latest != newVer || strings.Count(out.String(), "\n") != 1 {
+		t.Fatalf("out %q", out)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "new hpctun" {
+		t.Fatalf("hpctun = %q", b)
+	}
+}
+
+func TestSelfUpdateExpect(t *testing.T) {
+	for _, tc := range []struct {
+		name, running, latest, expect string
+		wantErr                       bool
+	}{
+		{"newer release since the offer", oldVer, newVer, "v0.20261001-1111111", true},
+		{"rolled back", "v0.20261009-1234567", newVer, newVer, true},
+		{"already there", newVer, newVer, newVer, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := &fakeSource{latest: tc.latest, files: release(t, false, false)}
+			exe := filepath.Join(t.TempDir(), "bin", exeName())
+			a, out := updateApp(t, exe, src, false)
+			a.ver = func() string { return tc.running }
+			err := runCmd(a, "self-update", "--json", "--expect", tc.expect)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(out.String(), `"error"`) {
+					t.Fatalf("err %v out %q", err, out)
+				}
+				if b, _ := os.ReadFile(exe); string(b) != "old hpctun" {
+					t.Fatal("changed")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d := updateDoc(t, out.String()); d.Updated || d.Action != "up_to_date" {
+				t.Fatalf("doc %+v", d)
+			}
+		})
+	}
+}
+
+func TestSelfUpdateJSONError(t *testing.T) {
+	src := &fakeSource{latest: newVer, err: errors.New("no network")}
+	a, out := updateApp(t, filepath.Join(t.TempDir(), "bin", exeName()), src, false)
+	err := runCmd(a, "self-update", "--check", "--json")
+	var e jsondoc.Error
+	if err == nil || json.Unmarshal([]byte(out.String()), &e) != nil || !strings.Contains(e.Error.Message, "no network") {
+		t.Fatalf("err %v out %q", err, out)
+	}
+}
+
+func TestSelfUpdateLockHeld(t *testing.T) {
+	src := &fakeSource{latest: newVer, files: release(t, false, false)}
+	exe := filepath.Join(t.TempDir(), "bin", exeName())
+	a, _ := updateApp(t, exe, src, false)
+	real, _ := filepath.EvalSymlinks(exe)
+	f, err := os.OpenFile(real+".update-lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if busy, err := filelock.TryLock(f); busy || err != nil {
+		t.Fatal(busy, err)
+	}
+	err = runCmd(a, "self-update")
+	if err == nil || !strings.Contains(err.Error(), "another update of") {
+		t.Fatalf("err %v", err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "old hpctun" {
+		t.Fatal("changed while locked")
+	}
+	f.Close()
+	if err := runCmd(a, "self-update"); err != nil {
+		t.Fatalf("after release: %v", err)
+	}
+}
+
+// A source whose download never finishes stands in for a trickling
+// connection: the preparation limit ends the update, changing nothing.
+type stuckSource struct{ fakeSource }
+
+func (s *stuckSource) Fetch(ctx context.Context, _ string, _ []string, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestSelfUpdatePrepLimit(t *testing.T) {
+	src := &stuckSource{fakeSource{latest: newVer}}
+	exe := filepath.Join(t.TempDir(), "bin", exeName())
+	a, _ := updateApp(t, exe, &src.fakeSource, false)
+	a.updates = src
+	a.updatePrep = 50 * time.Millisecond
+	err := runCmd(a, "self-update")
+	if err == nil || !strings.Contains(err.Error(), "took longer than") {
+		t.Fatalf("err %v", err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "old hpctun" {
+		t.Fatal("changed")
+	}
+}
+
+// windowsRelease is a Windows release whose zip carries both programs.
+func windowsRelease(t *testing.T) map[string][]byte {
+	t.Helper()
+	base := "hpctun-" + newVer + "-windows-" + runtime.GOARCH
+	files := map[string][]byte{base + ".zip": zipBytes(t, map[string]string{
+		base + "/hpctun.exe": "new hpctun", base + "/hpctun-tray.exe": "new tray",
+	})}
+	var sums strings.Builder
+	for n, b := range files {
+		fmt.Fprintf(&sums, "%x  %s\n", sha256.Sum256(b), n)
+	}
+	files["SHA256SUMS"] = []byte(sums.String())
+	files[selfupdate.SigName] = selfupdatetest.Sign(files["SHA256SUMS"])
+	return files
+}
+
+func windowsInstall(t *testing.T) (dir, exe, tray string) {
+	dir, _ = filepath.EvalSymlinks(t.TempDir())
+	exe, tray = filepath.Join(dir, "hpctun.exe"), filepath.Join(dir, "hpctun-tray.exe")
+	os.WriteFile(exe, []byte("old hpctun"), 0o755)
+	os.WriteFile(tray, []byte("old tray"), 0o755)
+	return
+}
+
+func TestSelfUpdateWindowsTray(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("no Windows release for this arch")
+	}
+	_, exe, tray := windowsInstall(t)
+	a, _ := updateApp(t, exe, &fakeSource{latest: newVer, files: windowsRelease(t)}, false)
+	a.goos = "windows"
+	if err := runCmd(a, "self-update"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(tray); string(b) != "new tray" {
+		t.Fatalf("tray = %q", b)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "new hpctun" {
+		t.Fatalf("hpctun = %q", b)
+	}
+	// Windows swaps rename the running programs aside; the next update's
+	// CleanOld removes these.
+	for _, p := range []string{exe + ".old", tray + ".old"} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+}
+
+func TestSelfUpdateWindowsUndoesTrayWhenHpctunFails(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skip("no Windows release for this arch")
+	}
+	_, exe, tray := windowsInstall(t)
+	a, _ := updateApp(t, exe, &fakeSource{latest: newVer, files: windowsRelease(t)}, false)
+	a.goos = "windows"
+	// hpctun's swap fails after the tray's succeeded.
+	a.replace = func(old, newPath string, windows bool) error {
+		if old == exe {
+			return errors.New("can't replace " + old + ": access denied")
+		}
+		return selfupdate.Replace(old, newPath, windows)
+	}
+	if err := runCmd(a, "self-update"); err == nil {
+		t.Fatal("update succeeded")
+	}
+	if b, _ := os.ReadFile(tray); string(b) != "old tray" {
+		t.Fatalf("tray = %q, want the old one back", b)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "old hpctun" {
+		t.Fatalf("hpctun = %q", b)
 	}
 }
