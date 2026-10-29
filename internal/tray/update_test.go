@@ -82,7 +82,9 @@ func startApp(t *testing.T, cli CLI, exe string, c *clock) (*App, *recorder) {
 	view := &recorder{}
 	a := &App{CLI: cli, View: view, Poll: time.Hour, Exe: exe, Now: c.now}
 	runApp(t, a)
-	eventually(t, "first status", func() bool { return view.last().Header != "" && view.last().Header != "hpctun: checking…" })
+	// The startup poll ends, maybeCheck included, when polls reaches 1;
+	// waiting for its header would leave it racing the test's clock moves.
+	eventually(t, "startup poll", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.s.polls >= 1 })
 	return a, view
 }
 
@@ -254,9 +256,16 @@ func TestLateCheckDropped(t *testing.T) {
 	}
 	c := &clock{t: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
 	a, view := startApp(t, u, exe, c)
+	a.mu.Lock()
+	n0 := a.s.polls
+	a.mu.Unlock()
 	c.add(2 * time.Minute)
 	a.Refresh()
-	eventually(t, "check started", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.s.checking })
+	eventually(t, "check started", func() bool {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return a.s.checking && a.s.polls > n0
+	})
 	u.mu.Lock()
 	u.st.UpdateCheck = false
 	u.mu.Unlock()
