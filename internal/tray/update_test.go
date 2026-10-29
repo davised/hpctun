@@ -370,6 +370,11 @@ func TestUpdateFailureShowsError(t *testing.T) {
 	if !strings.Contains(m.LastError, "signature does not verify") || m.Update != "Update to v0.20261202-4d5e6f7" || m.UpdateDisabled {
 		t.Fatalf("model %+v", m)
 	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.s.quitPending || a.s.updating {
+		t.Fatalf("state left over: %+v", a.s)
+	}
 }
 
 func TestRelaunchFailure(t *testing.T) {
@@ -475,4 +480,25 @@ func TestUpdatingStaysVisibleWhenStatusFails(t *testing.T) {
 	}
 	close(release)
 	a.Wait()
+}
+
+// A Quit that lands while the relaunch runs is not lost, though the
+// relaunch then fails. Only the relaunch-failure path is tested: a Quit
+// landing between the CLI's return and the lock cannot be placed
+// deterministically without a hook the code does not otherwise need.
+func TestQuitDuringFailedRelaunchStillQuits(t *testing.T) {
+	a, _, _ := offered(t, func(args []string) (string, string, int) { return updatedDoc(t, true), "", 0 })
+	var quit int
+	a.Quit = func() { quit++ }
+	a.Relaunch = func() error { a.RequestQuit(); return errors.New("no open") }
+	a.Update()
+	a.Wait()
+	if quit != 1 {
+		t.Fatalf("quit %d", quit)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.s.quitPending {
+		t.Fatal("quitPending left set")
+	}
 }

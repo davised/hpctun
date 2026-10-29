@@ -144,26 +144,33 @@ func (a *App) Update() {
 			err = fmt.Errorf("hpctun self-update --json: unexpected output")
 		}
 		a.mu.Lock()
-		quit := a.s.quitPending
-		a.mu.Unlock()
-		if quit {
+		if a.s.quitPending {
+			a.mu.Unlock()
 			a.Quit() // Quit wins: no relaunch, whatever the result
 			return
 		}
 		if err != nil {
-			a.mu.Lock()
+			// updating goes false in the same critical section that read
+			// quitPending: a Quit clicked later quits at once, and one
+			// clicked earlier was seen above.
 			a.s.updating, a.s.lastErr = false, err.Error()
 			a.mu.Unlock()
 			a.show()
 			return
 		}
+		a.mu.Unlock()
 		// updated:false means someone installed v from a terminal
 		// meanwhile; the tray on disk is still newer than this one.
 		if rerr := a.Relaunch(); rerr != nil {
 			a.mu.Lock()
-			a.s.updating, a.s.offer = false, ""
+			quit := a.s.quitPending
+			a.s.updating, a.s.quitPending, a.s.offer = false, false, ""
 			a.s.lastErr = fmt.Sprintf("Updated to %s; quit and reopen hpctun-tray", v)
 			a.mu.Unlock()
+			if quit {
+				a.Quit() // clicked while the relaunch ran
+				return
+			}
 			a.show()
 			return
 		}
