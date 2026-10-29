@@ -107,13 +107,14 @@ self-update moves you back to it and says so. A build from a checkout is
 only replaced with `--force`.
 
 `hpctun-tray` checks for a new release once a day (and a minute after it
-starts) and, when there is one, shows **Update to v…** in its menu. Click
-it to install the update; the tray restarts as the new version and open
-tunnels stay open. Nothing is installed without the click. To stop the
-tray from checking, set `update_check = false` in the config; `hpctun
-self-update` still works. `hpctun self-update --json` prints the result
-as JSON, and `--expect <version>` updates only to that version; the tray
-uses both.
+starts). When there is a newer release it can install, it shows
+**Update to v…** in its menu. Click it to install the update; the tray
+restarts as the new version and open tunnels stay open. Nothing is
+installed without the click. To stop the tray from checking, set
+`update_check = false` in the config; `hpctun self-update` still works.
+`hpctun self-update --json` prints the result as JSON, and
+`--expect <version>` updates only to that version, and only if it is
+newer; the tray uses both.
 
 What changed in each release is in [CHANGELOG.md](CHANGELOG.md) and on
 the [releases page](https://github.com/davised/hpctun/releases).
@@ -453,8 +454,6 @@ hpctun --askpass up --json jupyter
 tray. Its icon says whether you are logged in to the gateway: a filled
 disc when every tunnel is up, half filled when some are down, an empty
 ring when you are not logged in, struck through when something is wrong.
-When a new release is out, the menu offers **Update to v…**; see
-[Updating](#updating).
 Its menu has:
 
 - Your transfer host (such as `files`), and the login gateway when tunnels
@@ -470,6 +469,8 @@ Its menu has:
   with a `url`: runs `hpctun browse`, opening the tunnel first if needed.
 - The `hpctun code` job, when you have `[code]`.
 - The last error, when something failed; click it to dismiss it.
+- **Update to v…** when a newer release is out; one click installs it and
+  restarts the tray (see [Updating](#updating)).
 - **Open config**, **Start at login** and **Quit**. Quitting leaves your
   tunnels open.
 

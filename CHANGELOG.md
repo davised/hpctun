@@ -8,10 +8,10 @@ release is also its notes on the
 
 ### Added
 
-- `hpctun-tray` checks for a new release once a day and offers
-  **Update to v…** in its menu; one click installs it and restarts the
-  tray, with tunnels left open. `update_check = false` in the config
-  turns the check off.
+- `hpctun-tray` checks for a new release once a day and, when there is a
+  newer one it can install, offers **Update to v…** in its menu; one click
+  installs it and restarts the tray, with tunnels left open.
+  `update_check = false` in the config turns the check off.
 - `hpctun self-update --json` prints the result as JSON, and
   `--expect <version>` updates only to that version.
 
@@ -24,7 +24,9 @@ release is also its notes on the
 ### Fixed
 
 - On Windows, `hpctun self-update` now also updates `hpctun-tray.exe`;
-  before, the tray stayed on the version first installed.
+  before, the tray stayed on the version first installed. It tells you to
+  quit and reopen the tray, and if a tray still running from an earlier
+  update blocks the next one, the error says how to fix it.
 
 ## v0.20261028-188e3df (2026-10-28)
 
