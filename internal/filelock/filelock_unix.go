@@ -1,6 +1,9 @@
 //go:build !windows
 
-package state
+// Package filelock takes an exclusive, non-blocking lock on an open file.
+// The system releases it when the file is closed or the process exits,
+// crash included, so a lock can never be left behind.
+package filelock
 
 import (
 	"errors"
@@ -8,9 +11,9 @@ import (
 	"syscall"
 )
 
-// tryLock takes the exclusive lock on f without blocking. busy reports that
+// TryLock takes the exclusive lock on f without blocking. busy reports that
 // another process holds it.
-func tryLock(f *os.File) (busy bool, err error) {
+func TryLock(f *os.File) (busy bool, err error) {
 	for {
 		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		switch {

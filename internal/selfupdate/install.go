@@ -16,7 +16,7 @@ type Kind int
 
 const (
 	Plain         Kind = iota // hpctun on its own
-	PlainWithTray             // hpctun with hpctun-tray next to it (the Linux archive)
+	PlainWithTray             // hpctun with hpctun-tray next to it (the Linux and Windows archives)
 	App                       // inside a macOS .app bundle, which holds both
 )
 
@@ -39,7 +39,12 @@ func Detect(exe string) (Install, error) {
 	if filepath.Base(macos) == "MacOS" && filepath.Base(contents) == "Contents" && strings.HasSuffix(filepath.Dir(contents), ".app") {
 		return Install{Kind: App, Exe: real, Bundle: filepath.Dir(contents)}, nil
 	}
-	tray := filepath.Join(macos, "hpctun-tray")
+	// The tray's name follows hpctun's: hpctun-tray.exe next to hpctun.exe.
+	name := "hpctun-tray"
+	if strings.EqualFold(filepath.Ext(real), ".exe") {
+		name += ".exe"
+	}
+	tray := filepath.Join(macos, name)
 	if fi, err := os.Lstat(tray); err == nil && fi.Mode().IsRegular() {
 		return Install{Kind: PlainWithTray, Exe: real, Tray: tray}, nil
 	}
@@ -77,13 +82,13 @@ func (i Install) Asset(ver, goos, goarch string) (archive string, members []stri
 		return "", nil, fmt.Errorf("no release for %s/%s", goos, goarch)
 	}
 	base := "hpctun-" + ver + "-" + goos + "-" + goarch
-	archive, exe := base+".tar.gz", "hpctun"
+	archive, exe, tray := base+".tar.gz", "hpctun", "hpctun-tray"
 	if goos == "windows" {
-		archive, exe = base+".zip", "hpctun.exe"
+		archive, exe, tray = base+".zip", "hpctun.exe", "hpctun-tray.exe"
 	}
 	members = []string{base + "/" + exe}
 	if i.Kind == PlainWithTray {
-		members = append(members, base+"/hpctun-tray")
+		members = append(members, base+"/"+tray)
 	}
 	return archive, members, nil
 }

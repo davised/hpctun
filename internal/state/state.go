@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"hpctun/internal/config"
+	"hpctun/internal/filelock"
 )
 
 // Entry is one tunnel hpctun opened.
@@ -156,7 +157,7 @@ func Lock(ctx context.Context, path string, waiting func()) (*os.File, error) {
 		return nil, err
 	}
 	for waitingDone := false; ; {
-		busy, err := tryLock(f)
+		busy, err := filelock.TryLock(f)
 		if err != nil {
 			f.Close()
 			return nil, err

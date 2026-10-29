@@ -98,3 +98,21 @@ func TestReplaceUnwritable(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+// Undo puts old.old back over a replacement, which it deletes first: how a
+// Windows tray swap is reverted when hpctun's swap then fails.
+func TestUndo(t *testing.T) {
+	dir := t.TempDir()
+	old := filepath.Join(dir, "hpctun-tray.exe")
+	os.WriteFile(old, []byte("new"), 0o755)
+	os.WriteFile(old+".old", []byte("old"), 0o755)
+	if err := Undo(old); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(old); string(b) != "old" {
+		t.Fatalf("tray = %q", b)
+	}
+	if _, err := os.Stat(old + ".old"); !os.IsNotExist(err) {
+		t.Fatalf(".old still there: %v", err)
+	}
+}

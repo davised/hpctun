@@ -94,3 +94,22 @@ func TestAsset(t *testing.T) {
 		t.Errorf("Describe app = %q", got)
 	}
 }
+
+// Windows archives carry hpctun-tray.exe next to hpctun.exe; Detect works
+// from the file names, so this runs on every system.
+func TestDetectWindowsTray(t *testing.T) {
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	exe := filepath.Join(dir, "hpctun.exe")
+	tray := filepath.Join(dir, "hpctun-tray.exe")
+	os.WriteFile(exe, []byte("x"), 0o755)
+	os.WriteFile(tray, []byte("x"), 0o755)
+	inst, err := Detect(exe)
+	if err != nil || inst.Kind != PlainWithTray || inst.Tray != tray {
+		t.Fatalf("Detect = %+v, %v", inst, err)
+	}
+	_, members, err := inst.Asset("v0.20261111-0a1b2c3", "windows", "amd64")
+	base := "hpctun-v0.20261111-0a1b2c3-windows-amd64"
+	if err != nil || len(members) != 2 || members[0] != base+"/hpctun.exe" || members[1] != base+"/hpctun-tray.exe" {
+		t.Fatalf("members %q, %v", members, err)
+	}
+}
