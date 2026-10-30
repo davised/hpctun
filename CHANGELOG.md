@@ -8,25 +8,25 @@ release is also its notes on the
 
 ### Added
 
-- `hpctun-tray` checks for a new release once a day and, when there is a
-  newer one it can install, offers **Update to v…** in its menu; one click
-  installs it and restarts the tray, with tunnels left open.
-  `update_check = false` in the config turns the check off.
+- The menu-bar app (`hpctun-tray`) checks for a new release once a day.
+  When one is available it shows **Update to v…** in its menu; one click
+  installs it and restarts the app, and your tunnels stay open. Set
+  `update_check = false` in the config to turn the check off.
 - `hpctun self-update --json` prints the result as JSON, and
   `--expect <version>` updates only to that version.
 
 ### Changed
 
-- `hpctun self-update` refuses to run while another update of the same
-  install is running, and Ctrl-C no longer interrupts it while it swaps
-  files.
+- `hpctun self-update` refuses to start while another update of the same
+  install is running, and Ctrl-C no longer interrupts it while it replaces
+  files, so an update can't be left half done.
 
 ### Fixed
 
-- On Windows, `hpctun self-update` now also updates `hpctun-tray.exe`;
-  before, the tray stayed on the version first installed. It tells you to
-  quit and reopen the tray, and if a tray still running from an earlier
-  update blocks the next one, the error says how to fix it.
+- On Windows, `hpctun self-update` now updates `hpctun-tray.exe` too;
+  before, the menu-bar app stayed on the version first installed. After
+  updating, quit and reopen the app. If an app still running from an
+  earlier update blocks the next one, the error says what to do.
 
 ## v0.20261028-188e3df (2026-10-28)
 
