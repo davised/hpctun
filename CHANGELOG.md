@@ -6,6 +6,8 @@ release is also its notes on the
 
 ## Unreleased
 
+## v0.20261030-d37b87a (2026-10-30)
+
 ### Added
 
 - The menu-bar app (`hpctun-tray`) checks for a new release once a day.
