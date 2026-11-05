@@ -249,7 +249,7 @@ func (e Env) openProxied(ctx context.Context, profile string, port int, url stri
 			old = p
 		}
 	}
-	if err := e.Start(ProxyArgs(b, profile, port, url)); err != nil {
+	if err := e.Start(e.launch(ProxyArgs(b, profile, port, url))); err != nil {
 		return Browser{}, 0, fmt.Errorf("start %s: %w", b.Name, err)
 	}
 	if e.GOOS == "windows" && fresh {
@@ -259,6 +259,27 @@ func (e Env) openProxied(ctx context.Context, profile string, port int, url stri
 		_ = e.WriteFile(filepath.Join(profile, portFile), []byte(strconv.Itoa(port)+"\n"))
 	}
 	return b, old, nil
+}
+
+// launch is the command line that starts argv, a browser's executable and
+// its arguments. On macOS, an executable inside an app bundle is started
+// through LaunchServices with open -n: run directly, the browser counts as
+// part of hpctun (or the tray, or the terminal), and when its updater
+// writes to the bundle in /Applications, macOS blames hpctun with a
+// "prevented from modifying apps" warning. -n starts a new instance with
+// these arguments even when the browser is already running, and that
+// instance, like one run directly, hands the url to a window already open
+// on the same profile. Other executables are run directly.
+func (e Env) launch(argv []string) []string {
+	if e.GOOS != "darwin" {
+		return argv
+	}
+	i := strings.Index(argv[0], ".app/Contents/MacOS/")
+	if i < 0 {
+		return argv
+	}
+	bundle := argv[0][:i+len(".app")]
+	return append([]string{"open", "-n", "-a", bundle, "--args"}, argv[1:]...)
 }
 
 var proxyPort = regexp.MustCompile(`--proxy-server=socks5://127\.0\.0\.1:(\d+)`)
@@ -311,7 +332,7 @@ func (e Env) runningPort(ctx context.Context, profile string) (int, bool) {
 // opener. desc names the browser for messages.
 func (e Env) OpenPage(ctx context.Context, url string) (string, error) {
 	if b, ok := e.defaultChromium(ctx); ok {
-		if err := e.Start([]string{b.Path, url}); err != nil {
+		if err := e.Start(e.launch([]string{b.Path, url})); err != nil {
 			return "", fmt.Errorf("start %s: %w", b.Name, err)
 		}
 		return b.Name, nil

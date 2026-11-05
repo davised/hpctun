@@ -74,6 +74,8 @@ func TestOpenProxied(t *testing.T) {
 		{"linux path", "linux", nil, []string{"chromium"}, nil, "", "/usr/bin/chromium"},
 		{"linux default edge", "linux", nil, []string{"chromium", "microsoft-edge"}, map[string]string{"xdg-settings get default-web-browser": "microsoft-edge.desktop\n"}, "", "/usr/bin/microsoft-edge"},
 		{"HPCTUN_BROWSER", "linux", nil, []string{"chromium"}, nil, "/opt/vivaldi/vivaldi", "/opt/vivaldi/vivaldi"},
+		{"mac HPCTUN_BROWSER in a bundle", "darwin", []string{macChrome}, nil, nil, "/Applications/Vivaldi.app/Contents/MacOS/Vivaldi", "/Applications/Vivaldi.app/Contents/MacOS/Vivaldi"},
+		{"mac HPCTUN_BROWSER outside a bundle", "darwin", []string{macChrome}, nil, nil, "/opt/homebrew/bin/chromium", "/opt/homebrew/bin/chromium"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -90,6 +92,11 @@ func TestOpenProxied(t *testing.T) {
 			}
 			want := []string{c.want, "--user-data-dir=" + profile, "--proxy-server=socks5://127.0.0.1:1080",
 				"--no-first-run", "--no-default-browser-check", "https://chat.example.org"}
+			if i := strings.Index(c.want, ".app/"); c.goos == "darwin" && i >= 0 {
+				// Through LaunchServices, so macOS does not count the
+				// browser as part of hpctun.
+				want = append([]string{"open", "-n", "-a", c.want[:i+len(".app")], "--args"}, want[1:]...)
+			}
 			if len(*started) != 1 || !slices.Equal((*started)[0], want) || b.Path != c.want {
 				t.Fatalf("started %q, want %q", *started, want)
 			}
@@ -141,7 +148,7 @@ func TestOpenPage(t *testing.T) {
 		want        []string
 		desc        string
 	}{
-		{"mac chrome default: its binary, no profile", "darwin", []string{macChrome}, nil, map[string]string{lsPlist: lsJSON("com.google.chrome")}, []string{macChrome, "http://localhost:4001/"}, "Google Chrome"},
+		{"mac chrome default: its binary, no profile", "darwin", []string{macChrome}, nil, map[string]string{lsPlist: lsJSON("com.google.chrome")}, []string{"open", "-n", "-a", "/Applications/Google Chrome.app", "--args", "http://localhost:4001/"}, "Google Chrome"},
 		{"mac zen default", "darwin", []string{macChrome}, nil, map[string]string{lsPlist: lsJSON("app.zen-browser.zen")}, []string{"open", "http://localhost:4001/"}, "the default browser"},
 		{"mac no https entry: Safari", "darwin", []string{macChrome}, nil, map[string]string{lsPlist: `{"LSHandlers":[]}`}, []string{"open", "http://localhost:4001/"}, "the default browser"},
 		{"mac plutil fails", "darwin", []string{macChrome}, nil, nil, []string{"open", "http://localhost:4001/"}, "the default browser"},

@@ -6,6 +6,13 @@ release is also its notes on the
 
 ## Unreleased
 
+### Fixed
+
+- On macOS, opening a page from the menu bar or with `hpctun browse` no
+  longer brings up a warning that hpctun-tray (or your terminal) "was
+  prevented from modifying apps on your Mac". The browser now starts as
+  an app of its own, so its updater no longer counts as hpctun.
+
 ## v0.20261030-d37b87a (2026-10-30)
 
 ### Added
